@@ -8,6 +8,7 @@ const TEXTURE_URLS = {
   night: 'https://unpkg.com/three-globe@2.31.1/example/img/earth-night.jpg',
   bump: 'https://unpkg.com/three-globe@2.31.1/example/img/earth-topology.png',
   specular: 'https://unpkg.com/three-globe@2.31.1/example/img/earth-water.png',
+  clouds: 'https://unpkg.com/three-globe@2.31.1/example/img/earth-clouds.png',
 };
 
 // ─── Globe Vertex Shader ─────────────────────────────────────────────────────
@@ -74,12 +75,12 @@ const globeFragmentShader = /* glsl */ `
     float dayStrength = smoothstep(-0.25, 0.5, sunOrientation);
     vec3 earthColor = mix(nightColor, litDayColor, dayStrength);
 
-    // ── Atmosphere color: twilight (#bc490b) → day (#4db2ff) ──
-    vec3 atmDayColor = vec3(0.302, 0.698, 1.0);
-    vec3 atmTwilightColor = vec3(0.737, 0.286, 0.043);
+    // ── Atmosphere color: all blue tones ──
+    vec3 atmBrightColor = vec3(0.4, 0.7, 1.0);
+    vec3 atmDimColor = vec3(0.15, 0.35, 0.65);
     vec3 atmosphereColor = mix(
-      atmTwilightColor,
-      atmDayColor,
+      atmDimColor,
+      atmBrightColor,
       smoothstep(-0.25, 0.75, sunOrientation)
     );
 
@@ -125,12 +126,12 @@ const atmosphereFragmentShader = /* glsl */ `
     // Only on sun-facing side
     alpha *= smoothstep(-0.5, 1.0, sunOrientation);
 
-    // Atmosphere color
-    vec3 atmDayColor = vec3(0.302, 0.698, 1.0);
-    vec3 atmTwilightColor = vec3(0.737, 0.286, 0.043);
+    // Atmosphere color — all blue tones
+    vec3 atmBrightColor = vec3(0.4, 0.7, 1.0);
+    vec3 atmDimColor = vec3(0.15, 0.35, 0.65);
     vec3 atmosphereColor = mix(
-      atmTwilightColor,
-      atmDayColor,
+      atmDimColor,
+      atmBrightColor,
       smoothstep(-0.25, 0.75, sunOrientation)
     );
 
@@ -184,15 +185,17 @@ function createOrbitalRings() {
 
 // ─── Earth with Shader Materials ─────────────────────────────────────────────
 function EarthWithTextures({
-  dayMap, nightMap, bumpMap, specularMap,
+  dayMap, nightMap, bumpMap, specularMap, cloudsMap,
 }: {
   dayMap: THREE.Texture;
   nightMap: THREE.Texture;
   bumpMap: THREE.Texture;
   specularMap: THREE.Texture;
+  cloudsMap: THREE.Texture | null;
 }) {
   const globeRef = useRef<THREE.Mesh>(null);
   const atmosphereRef = useRef<THREE.Mesh>(null);
+  const cloudsRef = useRef<THREE.Mesh>(null);
   const ringsRef = useRef<THREE.Group>(null);
 
   const ringsGroup = useMemo(() => createOrbitalRings(), []);
@@ -233,6 +236,7 @@ function EarthWithTextures({
     const speed = 0.0003;
     if (globeRef.current) globeRef.current.rotation.y += speed;
     if (atmosphereRef.current) atmosphereRef.current.rotation.y += speed;
+    if (cloudsRef.current) cloudsRef.current.rotation.y += speed * 1.15; // clouds drift slightly faster
     if (ringsRef.current) ringsRef.current.rotation.y += speed * 0.5;
   });
 
@@ -242,6 +246,21 @@ function EarthWithTextures({
       <mesh ref={globeRef} material={globeMaterial}>
         <sphereGeometry args={[5, 64, 64]} />
       </mesh>
+
+      {/* Cloud layer — separate mesh slightly above surface */}
+      {cloudsMap && (
+        <mesh ref={cloudsRef}>
+          <sphereGeometry args={[5.06, 64, 64]} />
+          <meshPhongMaterial
+            map={cloudsMap}
+            transparent
+            opacity={0.35}
+            depthWrite={false}
+            side={THREE.DoubleSide}
+            blending={THREE.NormalBlending}
+          />
+        </mesh>
+      )}
 
       {/* Atmosphere — separate BackSide mesh for edge glow */}
       <mesh ref={atmosphereRef} scale={1.04} material={atmosphereMaterial}>
@@ -263,26 +282,37 @@ export default function Earth() {
     night: THREE.Texture;
     bump: THREE.Texture;
     specular: THREE.Texture;
+    clouds: THREE.Texture | null;
   } | null>(null);
 
   useEffect(() => {
     const loader = new THREE.TextureLoader();
     loader.crossOrigin = 'anonymous';
 
-    Promise.all([
+    // Load core textures (required)
+    const core = Promise.all([
       loader.loadAsync(TEXTURE_URLS.day),
       loader.loadAsync(TEXTURE_URLS.night),
       loader.loadAsync(TEXTURE_URLS.bump),
       loader.loadAsync(TEXTURE_URLS.specular),
-    ])
-      .then(([day, night, bump, specular]) => {
+    ]);
+
+    // Load clouds texture (optional — don't block if it fails)
+    const cloudsPromise = loader.loadAsync(TEXTURE_URLS.clouds).catch(() => null);
+
+    Promise.all([core, cloudsPromise])
+      .then(([[day, night, bump, specular], clouds]) => {
         day.colorSpace = THREE.SRGBColorSpace;
         day.anisotropy = 8;
         night.colorSpace = THREE.SRGBColorSpace;
         night.anisotropy = 8;
         bump.anisotropy = 8;
         specular.anisotropy = 8;
-        setTextures({ day, night, bump, specular });
+        if (clouds) {
+          clouds.colorSpace = THREE.SRGBColorSpace;
+          clouds.anisotropy = 8;
+        }
+        setTextures({ day, night, bump, specular, clouds });
       })
       .catch((err) => {
         console.warn('Failed to load Earth textures:', err);
@@ -306,6 +336,7 @@ export default function Earth() {
       nightMap={textures.night}
       bumpMap={textures.bump}
       specularMap={textures.specular}
+      cloudsMap={textures.clouds}
     />
   );
 }
