@@ -1,0 +1,165 @@
+/* Global Styles - SATTRACK Dashboard */
+
+:root {
+  --bg:          rgb(32, 33, 36);
+  --bg-panel:    #1c1d20;
+  --bg-panel2:   #17181b;
+  --bg-hover:    #26272b;
+  --border:      rgba(195, 195, 200, 0.15);
+  --border-med:  rgba(210, 210, 215, 0.26);
+  --text-hi:     #e8e8ea;
+  --text-md:     #8c8d92;
+  --text-lo:     #4e4f55;
+  --red:         #a62c2e;
+  --red-dim:     rgba(166, 44, 46, 0.09);
+  --red-border:  rgba(166, 44, 46, 0.32);
+  --red-text:    #c94244;
+  --leo:         #7a9e7a;
+  --meo:         #9e8f6a;
+  --geo:         #7a80a8;
+  --deb:         #8a4a4a;
+}
+
+/* Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap');
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 3px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-hover);
+  border-radius: 2px;
+}
+
+/* Keyframes */
+@keyframes blink {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+/* Global Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg);
+  color: var(--text-hi);
+  overflow: hidden;
+}
+
+/* Grid Layout */
+.shell {
+  display: grid;
+  grid-template-rows: 44px 1fr 34px;
+  height: 100vh;
+}
+.body-grid {
+  display: grid;
+  grid-template-columns: 272px 1fr 292px;
+  overflow: hidden;
+}
+
+/* Components */
+.dot-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+/* HUD Overlay */
+.hud-overlay {
+  position: absolute;
+  backdrop-filter: blur(8px);
+  background: rgba(20,21,24,0.82);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 8px 12px;
+  z-index: 10;
+}
+
+/* Timeline */
+.timeline {
+  background: var(--bg-panel2);
+  border-top: 1px solid var(--border);
+  padding: 8px 12px;
+}
+
+/* Satellite Row */
+.sat-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  transition: background 0.15s;
+}
+.sat-row:hover {
+  background: var(--bg-hover);
+}
+
+/* Selected Row */
+.sat-row.selected {
+  background: var(--red-dim);
+  border-left: 2px solid var(--red);
+  color: var(--red-text);
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10,11,14,0.72);
+  backdrop-filter: blur(6px);
+  z-index: 100;
+}
+
+.modal-card {
+  position: relative;
+  width: 430px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-med);
+  border-radius: 4px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+  margin: 100px auto 40px;
+  padding: 20px;
+}
+
+/* Corner Stars */
+.panel {
+  position: relative;
+}
+.panel::before,
+.panel::after {
+  content: "✦";
+  position: absolute;
+  font-size: 8px;
+  color: rgba(210,210,215,0.3);
+}
+.panel::before {
+  top: 10px;
+  left: 10px;
+}
+.panel::after {
+  bottom: 10px;
+  right: 10px;
+}
+
+/* Data Grid */
+.data-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  margin-top: 10px;
+}
+.data-grid::after {
+  content: '';
+  display: block;
+  height: 1px;
+  background: var(--border);
+}

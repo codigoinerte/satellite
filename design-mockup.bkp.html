@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SATTRACK — Orbital Intelligence Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ── TOKENS ──────────────────────────────────────────────── */
+    :root {
+      --bg:          rgb(32, 33, 36);
+      --bg-panel:    #1c1d20;
+      --bg-panel2:   #17181b;
+      --bg-hover:    #26272b;
+      --border:      rgba(195, 195, 200, 0.15);
+      --border-med:  rgba(210, 210, 215, 0.26);
+
+      --text-hi:     #e8e8ea;
+      --text-md:     #8c8d92;
+      --text-lo:     #4e4f55;
+
+      --red:         #a62c2e;
+      --red-dim:     rgba(166, 44, 46, 0.09);
+      --red-border:  rgba(166, 44, 46, 0.32);
+      --red-text:    #c94244;
+
+      /* subtle accent grays for orbit types */
+      --leo:   #7a9e7a;
+      --meo:   #9e8f6a;
+      --geo:   #7a80a8;
+      --deb:   #8a4a4a;
+    }
+
+    /* ── RESET ───────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--text-hi);
+      line-height: 1.5;
+      position: relative;
+    }
+
+    /* ── DOT CANVAS (fixed behind everything) ─────────────────── */
+    #dot-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ── SHELL ───────────────────────────────────────────────── */
+    .shell {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-rows: 44px 1fr 34px;
+      height: 100vh;
+    }
+
+    /* ── TOPBAR ──────────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 22px;
+      background: var(--bg-panel2);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-l { display: flex; align-items: center; gap: 18px; }
+    .brand    { display: flex; align-items: center; gap: 9px; }
+
+    .brand-icon {
+      width: 22px; height: 22px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .brand-icon svg { width: 20px; height: 20px; }
+
+    .brand-name {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      color: var(--text-hi);
+    }
+    .brand-div {
+      width: 1px; height: 18px;
+      background: var(--border-med);
+    }
+    .brand-sub {
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-lo);
+    }
+
+    .topnav { display: flex; gap: 2px; }
+    .tnav {
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      color: var(--text-md);
+      padding: 5px 13px;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: all .2s;
+    }
+    .tnav:hover { color: var(--text-hi); background: var(--bg-hover); }
+    .tnav.active { color: var(--text-hi); background: var(--bg-hover); }
+
+    .topbar-r { display: flex; align-items: center; gap: 14px; }
+    .sys-badge {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--text-lo);
+    }
+    .sys-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: #5a9e5a;
+      animation: blink 2s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+    .topbar-clock {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--text-md);
+      letter-spacing: 1px;
+      min-width: 78px;
+      text-align: right;
+    }
+
+    /* ── BODY GRID ───────────────────────────────────────────── */
+    .body-grid {
+      display: grid;
+      grid-template-columns: 272px 1fr 292px;
+      overflow: hidden;
+    }
+
+    /* ── SHARED PANEL ────────────────────────────────────────── */
+    .panel {
+      background: var(--bg-panel);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+    .panel-l { border-right: 1px solid var(--border); }
+    .panel-r { border-left:  1px solid var(--border); }
+
+    /* Corner dots (4-point star shape) */
+    .panel::before,
+    .panel::after {
+      content: '✦';
+      position: absolute;
+      font-size: 8px;
+      color: rgba(210, 210, 215, 0.30);
+      line-height: 1;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .panel-l::before { top: -1px;  left: -5px;  }
+    .panel-l::after  { bottom: -1px; left: -5px; }
+    .panel-r::before { top: -1px;  right: -5px; }
+    .panel-r::after  { bottom: -1px; right: -5px; }
+
+    /* ── SECTION HEADER ──────────────────────────────────────── */
+    .sec-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 15px;
+      background: var(--bg-panel2);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sec-title {
+      font-size: 9px; font-weight: 600;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-md);
+    }
+    .sec-badge {
+      font-family: 'Space Mono', monospace;
+      font-size: 9px;
+      color: var(--text-lo);
+      padding: 2px 6px;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+    }
+
+    /* ── SELECTED SAT ────────────────────────────────────────── */
+    .sel-body { padding: 13px 15px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+
+    .sel-name {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px; font-weight: 700;
+      color: var(--text-hi);
+      margin-bottom: 2px;
+    }
+    .sel-norad { font-size: 10px; color: var(--text-lo); margin-bottom: 10px; }
+
+    .sel-meta { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; }
+
+    .pill {
+      font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase;
+      padding: 2px 7px; border-radius: 2px; border: 1px solid;
+    }
+    .pill-leo { color: var(--leo); border-color: rgba(122,158,122,.3); background: rgba(122,158,122,.06); }
+    .pill-meo { color: var(--meo); border-color: rgba(158,143,106,.3); background: rgba(158,143,106,.06); }
+    .pill-geo { color: var(--geo); border-color: rgba(122,128,168,.3); background: rgba(122,128,168,.06); }
+    .pill-deb { color: var(--deb); border-color: rgba(138,74,74,.3);   background: rgba(138,74,74,.06);  }
+
+    .data-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 1px; background: var(--border);
+      border: 1px solid var(--border); border-radius: 3px; overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .dc {
+      padding: 9px 11px;
+      background: var(--bg);
+    }
+    .dc-label { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-lo); margin-bottom: 4px; }
+    .dc-val   { font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700; color: var(--text-hi); line-height: 1; }
+    .dc-unit  { font-size: 10px; color: var(--text-md); margin-left: 2px; font-family: 'Inter', sans-serif; }
+    .dc-val.g  { color: var(--leo); }
+    .dc-val.a  { color: var(--meo); }
+    .dc-val.r  { color: var(--red-text); }
+
+    .pos-box {
+      padding: 9px 11px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+    }
+    .pos-box-label { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-lo); margin-bottom: 7px; }
+    .pos-row { display: flex; gap: 18px; }
+    .pc { }
+    .pc-k { font-size: 9px; color: var(--text-lo); margin-bottom: 2px; }
+    .pc-v { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--text-hi); }
+
+    /* ── GLOBAL STATS ────────────────────────────────────────── */
+    .gstats {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      padding: 11px 15px; gap: 6px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .gs-val   { font-family: 'Space Mono', monospace; font-size: 17px; font-weight: 700; color: var(--text-hi); line-height: 1; margin-bottom: 3px; }
+    .gs-val.r { color: var(--red-text); }
+    .gs-label { font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-lo); }
+
+    /* ── ORBIT BARS ──────────────────────────────────────────── */
+    .orbit-bars { padding: 11px 15px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .obar { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
+    .obar:last-child { margin-bottom: 0; }
+    .obar-lbl { font-size: 9px; letter-spacing: 1px; width: 30px; flex-shrink: 0; }
+    .obar-lbl.leo { color: var(--leo); }
+    .obar-lbl.meo { color: var(--meo); }
+    .obar-lbl.geo { color: var(--geo); }
+    .obar-track { flex: 1; height: 3px; background: var(--bg-hover); border-radius: 2px; overflow: hidden; }
+    .obar-fill  { height: 100%; border-radius: 2px; opacity: .65; }
+    .obar-n     { font-family: 'Space Mono', monospace; font-size: 9px; color: var(--text-md); width: 36px; text-align: right; flex-shrink: 0; }
+
+    /* ── EVENT LOG ───────────────────────────────────────────── */
+    .log { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--bg-hover) transparent; }
+    .log-item {
+      display: flex; gap: 9px;
+      padding: 9px 15px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background .15s;
+    }
+    .log-item:hover { background: var(--bg-hover); }
+    .log-dot { width: 5px; height: 5px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+    .log-title { font-size: 11px; font-weight: 500; color: var(--text-hi); margin-bottom: 2px; }
+    .log-meta  { font-size: 10px; color: var(--text-lo); }
+
+    /* ── CENTER ──────────────────────────────────────────────── */
+    .center { display: flex; flex-direction: column; background: transparent; position: relative; }
+
+    .globe-area {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+    }
+    .globe-area::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 60% 60% at 50% 55%, rgba(50,51,56,.8) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* ── GLOBE MOCK ──────────────────────────────────────────── */
+    .globe-mock {
+      position: relative; width: 400px; height: 400px; flex-shrink: 0;
+    }
+    .globe-sphere {
+      position: absolute; inset: 0; border-radius: 50%;
+      background: radial-gradient(circle at 38% 34%, #1e1f22 0%, #0e0f11 100%);
+      border: 1px solid rgba(195,195,200,.12);
+      overflow: hidden;
+    }
+    /* lat lines */
+    .globe-sphere::before {
+      content: '';
+      position: absolute; inset: 0; border-radius: 50%;
+      background:
+        linear-gradient(transparent calc(50% - .5px), rgba(195,195,200,.18) calc(50% - .5px), rgba(195,195,200,.18) calc(50% + .5px), transparent calc(50% + .5px)),
+        linear-gradient(transparent calc(35% - .5px), rgba(195,195,200,.08) calc(35% - .5px), rgba(195,195,200,.08) calc(35% + .5px), transparent calc(35% + .5px)),
+        linear-gradient(transparent calc(65% - .5px), rgba(195,195,200,.08) calc(65% - .5px), rgba(195,195,200,.08) calc(65% + .5px), transparent calc(65% + .5px)),
+        linear-gradient(transparent calc(20% - .5px), rgba(195,195,200,.05) calc(20% - .5px), rgba(195,195,200,.05) calc(20% + .5px), transparent calc(20% + .5px)),
+        linear-gradient(transparent calc(80% - .5px), rgba(195,195,200,.05) calc(80% - .5px), rgba(195,195,200,.05) calc(80% + .5px), transparent calc(80% + .5px));
+    }
+    /* continents */
+    .globe-sphere::after {
+      content: '';
+      position: absolute; inset: 0; border-radius: 50%;
+      background:
+        radial-gradient(ellipse 54px 58px at 24% 38%, rgba(195,195,200,.18) 0%, transparent 100%),
+        radial-gradient(ellipse 34px 52px at 28% 62%, rgba(195,195,200,.15) 0%, transparent 100%),
+        radial-gradient(ellipse 28px 24px at 50% 32%, rgba(195,195,200,.18) 0%, transparent 100%),
+        radial-gradient(ellipse 38px 58px at 50% 57%, rgba(195,195,200,.15) 0%, transparent 100%),
+        radial-gradient(ellipse 78px 48px at 68% 34%, rgba(195,195,200,.16) 0%, transparent 100%),
+        radial-gradient(ellipse 28px 20px at 75% 64%, rgba(195,195,200,.13) 0%, transparent 100%);
+    }
+    .globe-spec {
+      position: absolute; inset: 0; border-radius: 50%;
+      background: radial-gradient(ellipse 50% 44% at 34% 30%, rgba(255,255,255,.04) 0%, transparent 60%);
+    }
+
+    /* orbit rings */
+    .oring {
+      position: absolute; border-radius: 50%; border: 1px solid;
+      pointer-events: none;
+    }
+    .or1 { width:460px;height:460px; top:50%;left:50%; transform:translate(-50%,-50%) rotateX(72deg);  border-color:rgba(195,195,200,.14); }
+    .or2 { width:520px;height:520px; top:50%;left:50%; transform:translate(-50%,-50%) rotateX(60deg) rotateZ(42deg); border-color:rgba(195,195,200,.07); border-style:dashed; }
+    .or3 { width:590px;height:590px; top:50%;left:50%; transform:translate(-50%,-50%) rotateX(54deg) rotateZ(-22deg); border-color:rgba(166,44,46,.07); border-style:dotted; }
+
+    /* satellite markers */
+    .smark { position:absolute; cursor:pointer; }
+    .smark-dot { width:6px;height:6px;border-radius:50%; transition:transform .2s; }
+    .smark:hover .smark-dot { transform:scale(2); }
+    .smark-lbl {
+      position:absolute; left:12px; top:-2px;
+      font-family:'Space Mono',monospace; font-size:9px;
+      color:var(--text-md); white-space:nowrap;
+      opacity:0; transition:opacity .2s; pointer-events:none;
+    }
+    .smark:hover .smark-lbl { opacity:1; }
+
+    /* crosshair targets */
+    .tgt { position:absolute; cursor:pointer; }
+    .tgt-cross { position:relative; width:12px;height:12px; }
+    .tgt-cross::before,.tgt-cross::after { content:''; position:absolute; background:var(--red); }
+    .tgt-cross::before { width:1px;height:12px; left:5px;top:0; }
+    .tgt-cross::after  { height:1px;width:12px; top:5px;left:0; }
+    .tgt-lbl { font-family:'Space Mono',monospace; font-size:9px; color:var(--red-text); margin-top:4px; opacity:0; transition:opacity .2s; }
+    .tgt:hover .tgt-lbl { opacity:1; }
+
+    /* HUD panels */
+    .hud { position:absolute; pointer-events:none; }
+    .hud-tl { top:18px; left:18px; }
+    .hud-tr { top:18px; right:18px; display:flex; gap:5px; pointer-events:all; }
+
+    .coords-card {
+      padding: 10px 12px;
+      background: rgba(20,21,24,.82);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      backdrop-filter: blur(8px);
+      min-width: 168px;
+    }
+    .cc-title { font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text-lo);margin-bottom:7px; }
+    .cc-row   { display:flex;justify-content:space-between;gap:10px;margin-bottom:3px; }
+    .cc-k     { font-size:9px; color:var(--text-lo); }
+    .cc-v     { font-family:'Space Mono',monospace; font-size:9px; color:var(--text-hi); }
+    .cc-v.r   { color:var(--red-text); }
+
+    .hud-btn {
+      font-size:9px;letter-spacing:1px;text-transform:uppercase;
+      padding:5px 10px;
+      border:1px solid var(--border-med);
+      background:rgba(20,21,24,.78);
+      color:var(--text-md);
+      cursor:pointer; border-radius:2px; transition:all .2s;
+    }
+    .hud-btn:hover { color:var(--text-hi); }
+    .hud-btn.on { color:var(--text-hi); border-color:var(--red-border); background:var(--red-dim); }
+
+    /* ── TIMELINE ────────────────────────────────────────────── */
+    .timeline {
+      padding: 9px 20px;
+      background: var(--bg-panel2);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; gap: 14px;
+      flex-shrink: 0;
+    }
+    .tl-label { font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-lo);white-space:nowrap; }
+    .tl-chips  { display:flex;gap:5px; }
+    .tc {
+      font-size:9px; padding:3px 8px;
+      border:1px solid var(--border); border-radius:2px;
+      color:var(--text-md); cursor:pointer; transition:all .15s;
+    }
+    .tc:hover { color:var(--text-hi); }
+    .tc.on { color:var(--text-hi); border-color:var(--red-border); background:var(--red-dim); }
+    .tl-track {
+      flex:1; height:2px; background:var(--bg-hover);
+      border-radius:2px; position:relative; overflow:visible;
+    }
+    .tl-fill { height:100%; width:62%; background:rgba(166,44,46,.45); border-radius:2px; }
+    .tl-head {
+      position:absolute; right:calc(100% - 62%);
+      top:-4px; width:9px;height:9px; border-radius:50%;
+      background:var(--red); border:2px solid var(--bg-panel2);
+      transform:translateX(50%);
+    }
+    .tl-ticks { display:flex;justify-content:space-between; width:220px; }
+    .tl-tick  { font-family:'Space Mono',monospace;font-size:9px;color:var(--text-lo); }
+    .tl-utc   { font-family:'Space Mono',monospace;font-size:9px;color:var(--text-md);white-space:nowrap; }
+
+    /* ── RIGHT PANEL ─────────────────────────────────────────── */
+    .sat-search-wrap { padding:9px 11px; border-bottom:1px solid var(--border); flex-shrink:0; }
+    .sat-search {
+      width:100%; background:var(--bg); border:1px solid var(--border);
+      border-radius:3px; color:var(--text-hi);
+      font-size:12px; font-family:'Inter',sans-serif;
+      padding:6px 10px; outline:none; transition:border-color .2s;
+    }
+    .sat-search:focus { border-color:var(--border-med); }
+    .sat-search::placeholder { color:var(--text-lo); }
+
+    .filter-chips { display:flex;gap:4px;padding:7px 11px;border-bottom:1px solid var(--border);flex-shrink:0; }
+    .fc {
+      font-size:9px;letter-spacing:1px;text-transform:uppercase;
+      padding:3px 8px; border:1px solid var(--border); border-radius:2px;
+      color:var(--text-lo); cursor:pointer; transition:all .15s;
+    }
+    .fc:hover { color:var(--text-md); border-color:var(--border-med); }
+    .fc.on    { color:var(--text-hi); border-color:var(--border-med); background:var(--bg-hover); }
+
+    .sat-list { flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:var(--bg-hover) transparent; }
+
+    .sat-row {
+      display:flex; align-items:flex-start; gap:9px;
+      padding:10px 13px;
+      border-bottom:1px solid var(--border);
+      cursor:pointer; transition:background .15s;
+      position:relative;
+    }
+    .sat-row:hover { background:var(--bg-hover); }
+    /* selected state: low-tone red */
+    .sat-row.on {
+      background: var(--red-dim);
+      border-left: 2px solid var(--red);
+    }
+    .sat-row.on .sr-name { color:var(--red-text); }
+
+    .sr-dot { width:5px;height:5px;border-radius:50%;margin-top:5px;flex-shrink:0; }
+    .sr-main { flex:1;min-width:0; }
+    .sr-name { font-size:11px;font-weight:500;color:var(--text-hi);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .sr-meta { display:flex;gap:8px;font-size:9px;color:var(--text-lo);font-family:'Space Mono',monospace; }
+    .sr-meta span { color:var(--text-md); }
+    .sr-right { text-align:right;flex-shrink:0; }
+    .sr-alt   { font-family:'Space Mono',monospace;font-size:10px;color:var(--text-hi);margin-bottom:3px; }
+
+    .panel-foot {
+      padding:7px 13px; border-top:1px solid var(--border); flex-shrink:0;
+      display:flex;align-items:center;justify-content:space-between;
+    }
+    .pf-info { font-size:9px;color:var(--text-lo);font-family:'Space Mono',monospace; }
+    .btn-sm {
+      font-size:9px;letter-spacing:1px;text-transform:uppercase;
+      padding:4px 11px; border:1px solid var(--border-med);
+      background:transparent; color:var(--text-md);
+      cursor:pointer; border-radius:2px; transition:all .2s;
+    }
+    .btn-sm:hover { color:var(--text-hi); }
+
+    /* ── STATUS BAR ──────────────────────────────────────────── */
+    .statusbar {
+      display:flex;align-items:center;justify-content:space-between;
+      padding:0 22px;
+      background:var(--bg-panel2);
+      border-top:1px solid var(--border);
+      font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text-lo);
+    }
+    .sb-c { display:flex;align-items:center;gap:18px; }
+    .sb-i { display:flex;align-items:center;gap:6px; }
+    .sb-i span:last-child { color:var(--text-md); }
+
+    /* ── MODAL ───────────────────────────────────────────────── */
+    .modal-bg {
+      position:fixed;inset:0;z-index:200;
+      background:rgba(10,11,14,.72);
+      backdrop-filter:blur(6px);
+      display:flex;align-items:center;justify-content:center;
+    }
+    .modal {
+      width:430px; background:var(--bg-panel);
+      border:1px solid var(--border-med);
+      border-radius:4px;
+      box-shadow:0 20px 50px rgba(0,0,0,.6);
+      overflow:hidden;
+    }
+    .modal-head {
+      display:flex;align-items:flex-start;justify-content:space-between;
+      padding:15px 18px 13px;
+      background:var(--bg-panel2);
+      border-bottom:1px solid var(--border);
+    }
+    .modal-title { font-family:'Space Mono',monospace;font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:3px; }
+    .modal-sub   { font-size:10px;color:var(--text-lo); }
+    .modal-close {
+      background:transparent;border:1px solid var(--border);
+      color:var(--text-lo);width:24px;height:24px;
+      cursor:pointer;font-size:13px;border-radius:2px;
+      display:flex;align-items:center;justify-content:center;
+      transition:all .15s;
+    }
+    .modal-close:hover { color:var(--text-hi); border-color:var(--border-med); }
+    .modal-body { padding:15px 18px; }
+    .m-sec-title { font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text-lo);margin-bottom:7px; }
+    .m3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px; }
+    .m2 { display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:12px; }
+    .mst {
+      padding:9px 11px;
+      background:var(--bg);
+      border:1px solid var(--border);border-radius:3px;
+    }
+    .mst-lbl { font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text-lo);margin-bottom:4px; }
+    .mst-val { font-family:'Space Mono',monospace;font-size:13px;font-weight:700;color:var(--text-hi); }
+    .mst-val.g { color:var(--leo); }
+    .mst-val.a { color:var(--meo); }
+    .mst-val.r { color:var(--red-text); }
+    .mst-unit  { font-size:9px;color:var(--text-md);margin-left:2px;font-family:'Inter',sans-serif; }
+    .modal-live {
+      display:flex;align-items:center;gap:7px;padding:9px 12px;
+      background:rgba(90,158,90,.04);
+      border:1px solid rgba(90,158,90,.18);border-radius:3px;
+      font-size:10px;color:#5a9e5a;letter-spacing:1px;
+    }
+
+    /* ── SCROLLBAR ───────────────────────────────────────────── */
+    ::-webkit-scrollbar { width:3px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:var(--bg-hover);border-radius:2px; }
+  </style>
+</head>
+<body>
+
+<!-- Interactive dot background -->
+<canvas id="dot-canvas"></canvas>
+
+<div class="shell">
+
+  <!-- ══ TOPBAR ══════════════════════════════════════════════ -->
+  <div class="topbar">
+    <div class="topbar-l">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="3" stroke="#d0d0d0" stroke-width="1.4"/>
+            <path d="M12 2v3.5M12 18.5V22M2 12h3.5M18.5 12H22" stroke="#a62c2e" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M5.8 5.8l2.5 2.5M15.7 15.7l2.5 2.5M5.8 18.2l2.5-2.5M15.7 8.3l2.5-2.5" stroke="#4e4f55" stroke-width="1" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="brand-name">SATTRACK</span>
+      </div>
+      <div class="brand-div"></div>
+      <span class="brand-sub">Orbital Intelligence</span>
+      <nav class="topnav">
+        <div class="tnav active">Globe</div>
+        <div class="tnav">Analytics</div>
+        <div class="tnav">Coverage</div>
+        <div class="tnav">Alerts</div>
+        <div class="tnav">API</div>
+      </nav>
+    </div>
+    <div class="topbar-r">
+      <div class="sys-badge">
+        <div class="sys-dot"></div>
+        <span>Online</span>
+      </div>
+      <div class="topbar-clock" id="clock">00:00:00</div>
+    </div>
+  </div>
+
+  <!-- ══ BODY ════════════════════════════════════════════════ -->
+  <div class="body-grid">
+
+    <!-- ── LEFT PANEL ────────────────────────────────────────── -->
+    <div class="panel panel-l">
+
+      <div class="sec-head">
+        <span class="sec-title">Selected Object</span>
+        <span class="sec-badge" style="color:var(--red-text);border-color:var(--red-border);">LOCKED</span>
+      </div>
+
+      <div class="sel-body">
+        <div class="sel-name">ISS (ZARYA)</div>
+        <div class="sel-norad">NORAD #25544 · COSPAR 1998-067A</div>
+        <div class="sel-meta">
+          <span class="pill pill-leo">LEO</span>
+          <span style="font-size:10px;color:var(--text-lo);">International</span>
+        </div>
+        <div class="data-grid">
+          <div class="dc">
+            <div class="dc-label">Altitude</div>
+            <div class="dc-val g">408<span class="dc-unit">km</span></div>
+          </div>
+          <div class="dc">
+            <div class="dc-label">Velocity</div>
+            <div class="dc-val a">7.66<span class="dc-unit">km/s</span></div>
+          </div>
+          <div class="dc">
+            <div class="dc-label">Inclination</div>
+            <div class="dc-val">51.64<span class="dc-unit">°</span></div>
+          </div>
+          <div class="dc">
+            <div class="dc-label">Period</div>
+            <div class="dc-val">92.9<span class="dc-unit">min</span></div>
+          </div>
+        </div>
+        <div class="pos-box">
+          <div class="pos-box-label">Current Position</div>
+          <div class="pos-row">
+            <div class="pc"><div class="pc-k">Lat</div><div class="pc-v">51.6403°</div></div>
+            <div class="pc"><div class="pc-k">Lon</div><div class="pc-v">-121.304°</div></div>
+            <div class="pc"><div class="pc-k">Orbit</div><div class="pc-v">138,204</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-title">Global Summary</span>
+      </div>
+
+      <div class="gstats">
+        <div><div class="gs-val">8,247</div><div class="gs-label">Tracked</div></div>
+        <div><div class="gs-val">4,821</div><div class="gs-label">Active</div></div>
+        <div><div class="gs-val r">312</div><div class="gs-label">Debris</div></div>
+      </div>
+
+      <div class="orbit-bars">
+        <div class="obar">
+          <span class="obar-lbl leo">LEO</span>
+          <div class="obar-track"><div class="obar-fill" style="width:72%;background:var(--leo);"></div></div>
+          <span class="obar-n">5,938</span>
+        </div>
+        <div class="obar">
+          <span class="obar-lbl meo">MEO</span>
+          <div class="obar-track"><div class="obar-fill" style="width:14%;background:var(--meo);"></div></div>
+          <span class="obar-n">1,154</span>
+        </div>
+        <div class="obar">
+          <span class="obar-lbl geo">GEO</span>
+          <div class="obar-track"><div class="obar-fill" style="width:14%;background:var(--geo);"></div></div>
+          <span class="obar-n">1,155</span>
+        </div>
+      </div>
+
+      <div class="sec-head" style="border-top:1px solid var(--border);">
+        <span class="sec-title">Recent Events</span>
+        <span class="sec-badge" style="color:#5a9e5a;border-color:rgba(90,158,90,.3);">Live</span>
+      </div>
+
+      <div class="log">
+        <div class="log-item">
+          <div class="log-dot" style="background:var(--meo);"></div>
+          <div><div class="log-title">Close approach detected</div><div class="log-meta">ISS / STARLINK-1007 · 2.4 km · 14:18</div></div>
+        </div>
+        <div class="log-item">
+          <div class="log-dot" style="background:var(--text-md);"></div>
+          <div><div class="log-title">New TLE data available</div><div class="log-meta">Space-Track.org · 8,247 objects · 14:15</div></div>
+        </div>
+        <div class="log-item">
+          <div class="log-dot" style="background:var(--leo);"></div>
+          <div><div class="log-title">NOAA-19 signal acquired</div><div class="log-meta">Station EU-04 · SNR 28 dB · 14:11</div></div>
+        </div>
+        <div class="log-item">
+          <div class="log-dot" style="background:var(--red-text);"></div>
+          <div><div class="log-title">Debris fragment tracked</div><div class="log-meta">Object 2024-017B · LEO 412 km · 14:03</div></div>
+        </div>
+        <div class="log-item">
+          <div class="log-dot" style="background:var(--text-md);"></div>
+          <div><div class="log-title">SENTINEL-2A pass complete</div><div class="log-meta">EU coverage · 786 km · 13:55</div></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── CENTER ─────────────────────────────────────────────── -->
+    <div class="center">
+
+      <div class="globe-area">
+
+        <!-- Globe mock (Three.js replaces this) -->
+        <div class="globe-mock" id="globe-placeholder">
+          <div class="oring or1"></div>
+          <div class="oring or2"></div>
+          <div class="oring or3"></div>
+          <div class="globe-sphere"><div class="globe-spec"></div></div>
+
+          <!-- Satellite markers -->
+          <div class="smark" style="top:14%;left:61%;">
+            <div class="smark-dot" style="background:#c8c8ca;box-shadow:0 0 4px rgba(200,200,202,.4);"></div>
+            <div class="smark-lbl">ISS</div>
+          </div>
+          <div class="smark" style="top:54%;left:73%;">
+            <div class="smark-dot" style="background:#c8c8ca;"></div>
+            <div class="smark-lbl">STARLINK-1007</div>
+          </div>
+          <div class="smark" style="top:69%;left:29%;">
+            <div class="smark-dot" style="background:var(--leo);box-shadow:0 0 4px rgba(122,158,122,.4);"></div>
+            <div class="smark-lbl">NOAA-19</div>
+          </div>
+          <div class="smark" style="top:24%;left:19%;">
+            <div class="smark-dot" style="background:var(--meo);box-shadow:0 0 4px rgba(158,143,106,.4);"></div>
+            <div class="smark-lbl">GPS-IIR-20</div>
+          </div>
+          <div class="smark" style="top:39%;left:46%;">
+            <div class="smark-dot" style="background:var(--geo);box-shadow:0 0 4px rgba(122,128,168,.4);"></div>
+            <div class="smark-lbl">HUBBLE</div>
+          </div>
+
+          <!-- Target crosshairs -->
+          <div class="tgt" style="top:33%;left:33%;">
+            <div class="tgt-cross"></div>
+            <div class="tgt-lbl">USA</div>
+          </div>
+          <div class="tgt" style="top:54%;left:52%;">
+            <div class="tgt-cross"></div>
+            <div class="tgt-lbl">AFRICA</div>
+          </div>
+        </div>
+
+        <!-- HUD: coords -->
+        <div class="hud hud-tl">
+          <div class="coords-card">
+            <div class="cc-title">Target Lock — ISS</div>
+            <div class="cc-row"><span class="cc-k">LAT</span><span class="cc-v">51.6403°</span></div>
+            <div class="cc-row"><span class="cc-k">LON</span><span class="cc-v">-121.304°</span></div>
+            <div class="cc-row"><span class="cc-k">ALT</span><span class="cc-v">408.2 km</span></div>
+            <div class="cc-row"><span class="cc-k">VEL</span><span class="cc-v">7.66 km/s</span></div>
+          </div>
+        </div>
+
+        <!-- HUD: toggle buttons -->
+        <div class="hud hud-tr">
+          <button class="hud-btn on">Orbits</button>
+          <button class="hud-btn">Targets</button>
+          <button class="hud-btn">Labels</button>
+        </div>
+
+      </div>
+
+      <!-- Timeline -->
+      <div class="timeline">
+        <span class="tl-label">Epoch</span>
+        <div class="tl-chips">
+          <div class="tc on">1D</div>
+          <div class="tc">1W</div>
+          <div class="tc">1M</div>
+        </div>
+        <div class="tl-track">
+          <div class="tl-fill"></div>
+          <div class="tl-head"></div>
+        </div>
+        <div class="tl-ticks">
+          <span class="tl-tick">00:00</span>
+          <span class="tl-tick">06:00</span>
+          <span class="tl-tick">12:00</span>
+          <span class="tl-tick">18:00</span>
+          <span class="tl-tick">24:00</span>
+        </div>
+        <div class="tl-utc" id="clock2">00:00:00 UTC</div>
+      </div>
+
+    </div>
+
+    <!-- ── RIGHT PANEL ────────────────────────────────────────── -->
+    <div class="panel panel-r">
+
+      <div class="sec-head">
+        <span class="sec-title">Satellite Feed</span>
+        <span class="sec-badge">8,247</span>
+      </div>
+
+      <div class="sat-search-wrap">
+        <input class="sat-search" type="text" placeholder="Search objects…" />
+      </div>
+
+      <div class="filter-chips">
+        <div class="fc on">All</div>
+        <div class="fc">LEO</div>
+        <div class="fc">MEO</div>
+        <div class="fc">GEO</div>
+        <div class="fc">Debris</div>
+      </div>
+
+      <div class="sat-list">
+
+        <div class="sat-row on" onclick="openModal()">
+          <div class="sr-dot" style="background:var(--red);"></div>
+          <div class="sr-main">
+            <div class="sr-name">ISS (ZARYA)</div>
+            <div class="sr-meta"><span>408 km</span> · <span>7.66 km/s</span> · #25544</div>
+          </div>
+          <div class="sr-right">
+            <div class="sr-alt">408 km</div>
+            <span class="pill pill-leo">LEO</span>
+          </div>
+        </div>
+
+        <div class="sat-row" onclick="openModal()">
+          <div class="sr-dot" style="background:var(--text-md);"></div>
+          <div class="sr-main">
+            <div class="sr-name">STARLINK-1007</div>
+            <div class="sr-meta"><span>550 km</span> · <span>7.59 km/s</span> · #44237</div>
+          </div>
+          <div class="sr-right">
+            <div class="sr-alt">550 km</div>
+            <span class="pill pill-leo">LEO</span>
+          </div>
+        </div>
+
+        <div class="sat-row">
+          <div class="sr-dot" style="background:var(--leo);"></div>
+          <div class="sr-main">
+            <div class="sr-name">NOAA-19</div>
+            <div class="sr-meta"><span>870 km</span> · <span>7.26 km/s</span> · #33591</div>
+          </div>
+          <div class="sr-right">
+            <div class="sr-alt">870 km</div>
+            <span class="pill pill-leo">LEO</span>
+          </div>
+        </div>
+
+        <div class="sat-row">
+          <div class="sr-dot" style="background:var(--meo);"></div>
+          <div class="sr-main">
+            <div class="sr-name">GPS-IIR-20 (SVN-59)</div>
+            <div class="sr-meta"><span>20,200 km</span> · <span>3.87 km/s</span> · #32711</div>
+          </div>
+          <div class="sr-right">
+            <div class="sr-alt">20,200 km</div>
+            <span class="pill pill-meo">MEO</span>
+          </div>
+        </div>
+
+        <div class="sat-row">
+          <div class="sr-dot" style="background:var(--geo);"></div>
+          <div class="sr-main">
+            <div class="sr-name">INTELSAT 901</div>
+            <div class="sr-meta"><span>35,786 km</span> · <span>3.07 km/s</span> · #26824</div>
+          </div>
+          <div class="sr-right">
+            <div class="sr-alt">35,786 km</div>
+            <span class="pill pill-geo">GEO</span>
+          </div>
+        </div>
+
+        <div class="sat-row">
+          <div class="sr-dot" style="background:var(--leo);"></div>
+          <div class="sr-main">
+            <div class="sr-name">TERRA</div>
+            <div class="sr-meta"><span>705 km</span> · <span>7.53 km/s</span> · #25994</div>
+          </div>
+          <div class="sr-right">
+            <div class="sr-alt">705 km</div>
+            <span class="pill pill-leo">LEO</span>
+          </div>
+        </div>
+
+        <div class="sat-row">
+          <div class="sr-dot" style="background:var(--geo);"></div>
+          <div class="sr-main">
+            <div class="sr-name">HUBBLE SPACE TELESCOPE</div>
+            <div class="sr-meta"><span>535 km</span> · <span>7.59 km/s</span> · #20580</div>
+          </div>
+          <div class="sr-right">
+            <div class="sr-alt">535 km</div>
+            <span class="pill pill-leo">LEO</span>
+          </div>
+        </div>
+
+        <div class="sat-row">
+          <div class="sr-dot" style="background:var(--text-md);"></div>
+          <div class="sr-main">
+            <div class="sr-name">SENTINEL-2A</div>
+            <div class="sr-meta"><span>786 km</span> · <span>7.45 km/s</span> · #40697</div>
+          </div>
+          <div class="sr-right">
+            <div class="sr-alt">786 km</div>
+            <span class="pill pill-leo">LEO</span>
+          </div>
+        </div>
+
+        <div class="sat-row">
+          <div class="sr-dot" style="background:var(--meo);"></div>
+          <div class="sr-main">
+            <div class="sr-name">ONEWEB-0012</div>
+            <div class="sr-meta"><span>1,200 km</span> · <span>7.12 km/s</span> · #47844</div>
+          </div>
+          <div class="sr-right">
+            <div class="sr-alt">1,200 km</div>
+            <span class="pill pill-leo">LEO</span>
+          </div>
+        </div>
+
+        <div class="sat-row">
+          <div class="sr-dot" style="background:var(--deb);"></div>
+          <div class="sr-main">
+            <div class="sr-name">SL-16 DEB (2024-017B)</div>
+            <div class="sr-meta"><span>412 km</span> · <span>7.64 km/s</span> · #58841</div>
+          </div>
+          <div class="sr-right">
+            <div class="sr-alt">412 km</div>
+            <span class="pill pill-deb">DEB</span>
+          </div>
+        </div>
+
+        <div class="sat-row">
+          <div class="sr-dot" style="background:var(--leo);"></div>
+          <div class="sr-main">
+            <div class="sr-name">AQUA</div>
+            <div class="sr-meta"><span>709 km</span> · <span>7.52 km/s</span> · #27424</div>
+          </div>
+          <div class="sr-right">
+            <div class="sr-alt">709 km</div>
+            <span class="pill pill-leo">LEO</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="panel-foot">
+        <span class="pf-info">Updated 14:20 UTC</span>
+        <button class="btn-sm">↺ Refresh</button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ══ STATUS BAR ══════════════════════════════════════════ -->
+  <div class="statusbar">
+    <div class="sb-i"><span>Source:</span><span>N2YO.com · Space-Track.org</span></div>
+    <div class="sb-c">
+      <div class="sb-i"><span>Refresh:</span><span>5 min</span></div>
+      <div class="sb-i"><span>View:</span><span>3D Globe</span></div>
+      <div class="sb-i"><span>Objects:</span><span>8,247</span></div>
+    </div>
+    <div class="sb-i">
+      <div class="sys-dot"></div>
+      <span>SATTRACK v2.4.1</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ MODAL ══════════════════════════════════════════════════ -->
+<div class="modal-bg" id="modal" style="display:none;" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">ISS (ZARYA)</div>
+        <div class="modal-sub">NORAD #25544 · COSPAR 1998-067A · International</div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="m-sec-title">Orbital Parameters</div>
+      <div class="m3">
+        <div class="mst"><div class="mst-lbl">Altitude</div><div class="mst-val g">408<span class="mst-unit">km</span></div></div>
+        <div class="mst"><div class="mst-lbl">Velocity</div><div class="mst-val a">7.66<span class="mst-unit">km/s</span></div></div>
+        <div class="mst"><div class="mst-lbl">Period</div><div class="mst-val">92.9<span class="mst-unit">min</span></div></div>
+        <div class="mst"><div class="mst-lbl">Inclination</div><div class="mst-val">51.64<span class="mst-unit">°</span></div></div>
+        <div class="mst"><div class="mst-lbl">Eccentricity</div><div class="mst-val">0.0003</div></div>
+        <div class="mst"><div class="mst-lbl">Orbit #</div><div class="mst-val">138,204</div></div>
+      </div>
+      <div class="m-sec-title">Current Position</div>
+      <div class="m2">
+        <div class="mst"><div class="mst-lbl">Latitude</div><div class="mst-val">51.6403<span class="mst-unit">°N</span></div></div>
+        <div class="mst"><div class="mst-lbl">Longitude</div><div class="mst-val">-121.304<span class="mst-unit">°W</span></div></div>
+      </div>
+      <div class="modal-live">
+        <div class="sys-dot"></div>
+        Live tracking active · Auto-refresh 30 s
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ── DOT GRID ──────────────────────────────────────────── */
+  (function () {
+    const canvas = document.getElementById('dot-canvas');
+    const ctx    = canvas.getContext('2d');
+    const SPACING   = 10;   // distance between dots
+    const R_BASE    = 1.0;  // normal radius
+    const R_LIT     = 1.15; // lit radius near cursor
+    const A_BASE    = 0.18; // normal alpha
+    const A_LIT     = 0.55; // lit alpha
+    const REACH     = 110;  // px radius of influence
+    let mx = -9999, my = -9999;
+
+    function resize() {
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+      draw();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const cols = Math.ceil(canvas.width  / SPACING) + 1;
+      const rows = Math.ceil(canvas.height / SPACING) + 1;
+      for (let c = 0; c < cols; c++) {
+        for (let r = 0; r < rows; r++) {
+          const x = c * SPACING + SPACING * 0.5;
+          const y = r * SPACING + SPACING * 0.5;
+          const d = Math.hypot(x - mx, y - my);
+          const t = d < REACH ? Math.pow(1 - d / REACH, 1.6) : 0;
+          const radius = R_BASE + (R_LIT - R_BASE) * t;
+          const alpha  = A_BASE + (A_LIT  - A_BASE) * t;
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(220, 220, 225, ${alpha})`;
+          ctx.fill();
+        }
+      }
+    }
+
+    window.addEventListener('resize', resize);
+    window.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; draw(); });
+    resize();
+  })();
+
+  /* ── CLOCK ──────────────────────────────────────────────── */
+  (function tick() {
+    const n = new Date();
+    const p = v => String(v).padStart(2, '0');
+    const t = `${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;
+    document.getElementById('clock').textContent = t;
+    document.getElementById('clock2').textContent = t + ' UTC';
+    setTimeout(tick, 1000);
+  })();
+
+  /* ── MODAL ──────────────────────────────────────────────── */
+  function openModal()  { document.getElementById('modal').style.display = 'flex'; }
+  function closeModal() { document.getElementById('modal').style.display = 'none'; }
+
+  /* ── INTERACTIONS ───────────────────────────────────────── */
+  document.querySelectorAll('.tnav').forEach(el =>
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.tnav').forEach(x => x.classList.remove('active'));
+      el.classList.add('active');
+    })
+  );
+  document.querySelectorAll('.fc').forEach(el =>
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.fc').forEach(x => x.classList.remove('on'));
+      el.classList.add('on');
+    })
+  );
+  document.querySelectorAll('.tc').forEach(el =>
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.tc').forEach(x => x.classList.remove('on'));
+      el.classList.add('on');
+    })
+  );
+  document.querySelectorAll('.hud-btn').forEach(el =>
+    el.addEventListener('click', () => el.classList.toggle('on'))
+  );
+  document.querySelectorAll('.sat-row').forEach(el =>
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.sat-row').forEach(x => x.classList.remove('on'));
+      el.classList.add('on');
+    })
+  );
+</script>
+</body>
+</html>
