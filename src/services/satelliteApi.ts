@@ -10,7 +10,8 @@ import {
 import type { Satellite3D, OrbitType, SatelliteEvent, CelesTrakGP } from '../types/satellite';
 
 // ─── CelesTrak endpoints (free, no API key) ──────────────────────────────────
-const CELESTRAK_BASE = 'https://celestrak.org/GP/query.php';
+// Note: CelesTrak.org updated their API. Using the new endpoint format
+const CELESTRAK_BASE = 'https://celestrak.org/NORAD/elements/gp.php';
 
 // Groups to fetch – kept small for fast load
 const GROUPS = ['stations', 'visual'];
