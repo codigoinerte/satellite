@@ -15,22 +15,11 @@ const EarthScene = (_: EarthSceneProps) => {
         style={{ width: '100%', height: '100%', background: 'transparent', flex: 1 }}
         gl={{ alpha: true, antialias: true }}
       >
-        {/* Strong ambient light so the globe is always visible */}
-        <ambientLight intensity={0.8} />
+        {/* Minimal ambient — the custom shader handles its own lighting */}
+        <ambientLight intensity={0.05} />
 
-        {/* Sun-like directional light — illuminates one side */}
-        <directionalLight
-          position={[5, 3, 5]}
-          intensity={2.5}
-          color="#ffffff"
-        />
-
-        {/* Fill light from the opposite side */}
-        <directionalLight
-          position={[-5, -1, -3]}
-          intensity={0.4}
-          color="#8899bb"
-        />
+        {/* Sun — matches sunDirection uniform in the shader */}
+        <directionalLight position={[1, 0.3, 1]} intensity={1.5} color="#ffffff" />
 
         {/* Earth with axial tilt (-23.4°) */}
         <group rotation={[-0.408, 0, 0]}>
