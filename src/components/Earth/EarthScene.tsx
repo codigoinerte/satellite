@@ -15,27 +15,24 @@ const EarthScene = (_: EarthSceneProps) => {
         style={{ width: '100%', height: '100%', background: 'transparent', flex: 1 }}
         gl={{ alpha: true, antialias: true }}
       >
-        {/* Lighting - NEW SETUP */}
-        {/* Ambient light - neutral gray tone */}
-        <ambientLight intensity={0.3} color="#c3c3c8" />
+        {/* Strong ambient light so the globe is always visible */}
+        <ambientLight intensity={0.8} />
 
-        {/* Main point light - simulates top-left highlight */}
-        <pointLight
-          position={[-4, 5, 10]}
-          intensity={0.5}
-          color="#d0d0d5"
-          distance={30}
-          decay={2}
+        {/* Sun-like directional light — illuminates one side */}
+        <directionalLight
+          position={[5, 3, 5]}
+          intensity={2.5}
+          color="#ffffff"
         />
 
-        {/* Fill light from below */}
-        <pointLight
-          position={[3, -3, 5]}
-          intensity={0.1}
-          color="#c3c3c8"
+        {/* Fill light from the opposite side */}
+        <directionalLight
+          position={[-5, -1, -3]}
+          intensity={0.4}
+          color="#8899bb"
         />
 
-        {/* Earth with axial tilt */}
+        {/* Earth with axial tilt (-23.4°) */}
         <group rotation={[-0.408, 0, 0]}>
           <Earth />
         </group>
