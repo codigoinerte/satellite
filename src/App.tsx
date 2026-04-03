@@ -1,118 +1,126 @@
 import { useEffect, useState } from 'react';
+import DotCanvas from './components/UI/DotCanvas';
+import { Topbar } from './components/Layout/Topbar';
+import { StatusBar } from './components/Layout/StatusBar';
+import { LeftPanel } from './components/UI/LeftPanel';
+import { RightPanel } from './components/UI/RightPanel';
+import EarthScene from './components/Earth/EarthScene';
+import { HudOverlay } from './components/UI/HudOverlay';
+import { Timeline } from './components/UI/Timeline';
+import { SatelliteModal } from './components/UI/SatelliteModal';
+import { fetchSatellites, generateEvents, calcStats } from './services/satelliteApi';
+import type { Satellite3D, SatelliteEvent, SatelliteStats } from './types/satellite';
 
-const App = () => {
-  const [time, setTime] = useState(new Date());
-  const [selectedSatellite, setSelectedSatellite] = useState(null);
-  const [activeTab, setActiveTab] = useState('globe');
-  const [isDarkMode, setIsDarkMode] = useState(true);
+function App() {
+  const [satellites, setSatellites] = useState<Satellite3D[]>([]);
+  const [selectedSatellite, setSelectedSatellite] = useState<Satellite3D | null>(null);
+  const [events, setEvents] = useState<SatelliteEvent[]>([]);
+  const [stats, setStats] = useState<SatelliteStats>({
+    total: 0,
+    leo: 0,
+    meo: 0,
+    geo: 0,
+    debris: 0,
+  });
   const [showModal, setShowModal] = useState(false);
-  const [refreshInterval, setRefreshInterval] = useState(300000); // 5 minutes
-  const [lastRefresh, setLastRefresh] = useState(new Date());
-  const [showTimeline, setShowTimeline] = useState(false);
-  const [timelineRange, setTimelineRange] = useState('1D');
-  const [selectedFilter, setSelectedFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
-  const [showAbout, setShowAbout] = useState(false);
-  const [showCredits, setShowCredits] = useState(false);
-  const [showChangelog, setShowChangelog] = useState(false);
-  const [showPreferences, setShowPreferences] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  const [showCoverage, setShowCoverage] = useState(false);
-  const [showAlerts, setShowAlerts] = useState(false);
-  const [showAPI, setShowAPI] = useState(false);
-  const [showOrbits, setShowOrbits] = useState(true);
-  const [showTargets, setShowTargets] = useState(true);
-  const [showLabels, setShowLabels] = useState(true);
-  const [showTimelineScrubber, setShowTimelineScrubber] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [timelineProgress, setTimelineProgress] = useState(62);
-  const [showStatusBar, setShowStatusBar] = useState(true);
-  const [showTopbar, setShowTopbar] = useState(true);
-  const [showLeftPanel, setShowLeftPanel] = useState(true);
-  const [showRightPanel, setShowRightPanel] = useState(true);
-  const [showDotCanvas, setShowDotCanvas] = useState(true);
-  const [showEarthScene, setShowEarthScene] = useState(true);
-  const [showHudOverlay, setShowHudOverlay] = useState(true);
-  const [showTimelineComponent, setShowTimelineComponent] = useState(true);
-  const [showSatelliteModal, setShowSatelliteModal] = useState(false);
-  const [showEventLog, setShowEventLog] = useState(false);
-  const [showFilterChips, setShowFilterChips] = useState(true);
-  const [showSearchInput, setShowSearchInput] = useState(true);
-  const [showSatelliteList, setShowSatelliteList] = useState(true);
-  const [showSatelliteFooter, setShowSatelliteFooter] = useState(true);
-  const [showSatelliteHeader, setShowSatelliteHeader] = useState(true);
-  const [showSatelliteBody, setShowSatelliteBody] = useState(true);
-  const [showSatelliteFooterText, setShowSatelliteFooterText] = useState(true);
-  const [showSatelliteRefreshButton, setShowSatelliteRefreshButton] = useState(true);
-  const [showSatelliteCount, setShowSatelliteCount] = useState(true);
-  const [showSatelliteSource, setShowSatelliteSource] = useState(true);
-  const [showSatelliteView, setShowSatelliteView] = useState(true);
-  const [showSatelliteObjects, setShowSatelliteObjects] = useState(true);
-  const [showSatelliteVersion, setShowSatelliteVersion] = useState(true);
-  const [showSatelliteStatus, setShowSatelliteStatus] = useState(true);
-  const [showSatelliteDot, setShowSatelliteDot] = useState(true);
-  const [showSatelliteClock, setShowSatelliteClock] = useState(true);
-  const [showSatelliteStatusDot, setShowSatelliteStatusDot] = useState(true);
-  const [showSatelliteStatusText, setShowSatelliteStatusText] = useState(true);
-  const [showSatelliteStatusIcon, setShowSatelliteStatusIcon] = useState(true);
-  const [showSatelliteStatusBadge, setShowSatelliteStatusBadge] = useState(true);
-  const [showSatelliteStatusBadgeText, setShowSatelliteStatusBadgeText] = useState(true);
-  const [showSatelliteStatusBadgeIcon, setShowSatelliteStatusBadgeIcon] = useState(true);
-  const [showSatelliteStatusBadgeColor, setShowSatelliteStatusBadgeColor] = useState(true);
-  const [showSatelliteStatusBadgeBorder, setShowSatelliteStatusBadgeBorder] = useState(true);
-  const [showSatelliteStatusBadgeShadow, setShowSatelliteStatusBadgeShadow] = useState(true);
-  const [showSatelliteStatusBadgeBackground, setShowSatelliteStatusBadgeBackground] = useState(true);
-  const [showSatelliteStatusBadgeTextShadow, setShowSatelliteStatusBadgeTextShadow] = useState(true);
-  const [showSatelliteStatusBadgeTextBorder, setShowSatelliteStatusBadgeTextBorder] = useState(true);
-  const [showSatelliteStatusBadgeTextBackground, setShowSatelliteStatusBadgeTextBackground] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColor, setShowSatelliteStatusBadgeTextShadowColor] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowBlur, setShowSatelliteStatusBadgeTextShadowBlur] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowSpread, setShowSatelliteStatusBadgeTextShadowSpread] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowRadius, setShowSatelliteStatusBadgeTextShadowRadius] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowOffset, setShowSatelliteStatusBadgeTextShadowOffset] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowPosition, setShowSatelliteStatusBadgeTextShadowPosition] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowDirection, setShowSatelliteStatusBadgeTextShadowDirection] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowAngle, setShowSatelliteStatusBadgeTextShadowAngle] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowLength, setShowSatelliteStatusBadgeTextShadowLength] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowWidth, setShowSatelliteStatusBadgeTextShadowWidth] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowHeight, setShowSatelliteStatusBadgeTextShadowHeight] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowOpacity, setShowSatelliteStatusBadgeTextShadowOpacity] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowBlurRadius, setShowSatelliteStatusBadgeTextShadowBlurRadius] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowSpreadRadius, setShowSatelliteStatusBadgeTextShadowSpreadRadius] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowOffsetX, setShowSatelliteStatusBadgeTextShadowOffsetX] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowOffsetY, setShowSatelliteStatusBadgeTextShadowOffsetY] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorOpacity, setShowSatelliteStatusBadgeTextShadowColorOpacity] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorSaturation, setShowSatelliteStatusBadgeTextShadowColorSaturation] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorLightness, setShowSatelliteStatusBadgeTextShadowColorLightness] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorHue, setShowSatelliteStatusBadgeTextShadowColorHue] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorAlpha, setShowSatelliteStatusBadgeTextShadowColorAlpha] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorRed, setShowSatelliteStatusBadgeTextShadowColorRed] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorGreen, setShowSatelliteStatusBadgeTextShadowColorGreen] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorBlue, setShowSatelliteStatusBadgeTextShadowColorBlue] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorYellow, setShowSatelliteStatusBadgeTextShadowColorYellow] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorMagenta, setShowSatelliteStatusBadgeTextShadowColorMagenta] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorCyan, setShowSatelliteStatusBadgeTextShadowColorCyan] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorBlack, setShowSatelliteStatusBadgeTextShadowColorBlack] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorWhite, setShowSatelliteStatusBadgeTextShadowColorWhite] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorGray, setShowSatelliteStatusBadgeTextShadowColorGray] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorPink, setShowSatelliteStatusBadgeTextShadowColorPink] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorPurple, setShowSatelliteStatusBadgeTextShadowColorPurple] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorOrange, setShowSatelliteStatusBadgeTextShadowColorOrange] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorBrown, setShowSatelliteStatusBadgeTextShadowColorBrown] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorTeal, setShowSatelliteStatusBadgeTextShadowColorTeal] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorLime, setShowSatelliteStatusBadgeTextShadowColorLime] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorMaroon, setShowSatelliteStatusBadgeTextShadowColorMaroon] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorOlive, setShowSatelliteStatusBadgeTextShadowColorOlive] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorNavy, setShowSatelliteStatusBadgeTextShadowColorNavy] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorSilver, setShowSatelliteStatusBadgeTextShadowColorSilver] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorGold, setShowSatelliteStatusBadgeTextShadowColorGold] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorIndigo, setShowSatelliteStatusBadgeTextShadowColorIndigo] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorViolet, setShowSatelliteStatusBadgeTextShadowColorViolet] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorCrimson, setShowSatelliteStatusBadgeTextShadowColorCrimson] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorRosyBrown, setShowSatelliteStatusBadgeTextShadowColorRosyBrown] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorSaddleBrown, setShowSatelliteStatusBadgeTextShadowColorSaddleBrown] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorDarkGoldenRod, setShowSatelliteStatusBadgeTextShadowColorDarkGoldenRod] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorDarkOliveGreen, setShowSatelliteStatusBadgeTextShadowColorDarkOliveGreen] = useState(true);
-  const [showSatelliteStatusBadgeTextShadowColorDarkSalmon, setShowSatelliteStatusBadgeTextShadowColorDarkSalmon] =,
+
+  // Load satellites on mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const sats = await fetchSatellites();
+        setSatellites(sats);
+
+        // Select the first satellite by default (ISS if available)
+        const iss = sats.find((s) => s.name.toUpperCase().includes('ISS'));
+        if (iss) {
+          setSelectedSatellite(iss);
+        } else if (sats.length > 0) {
+          setSelectedSatellite(sats[0]);
+        }
+
+        // Generate events and stats
+        const evts = generateEvents(sats);
+        setEvents(evts);
+
+        const st = calcStats(sats);
+        setStats(st);
+      } catch (err) {
+        console.error('Failed to load satellites:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const handleSatelliteSelect = (sat: Satellite3D) => {
+    setSelectedSatellite(sat);
+  };
+
+  return (
+    <div className="shell">
+      {/* DotCanvas background */}
+      <DotCanvas />
+
+      {/* Topbar */}
+      <Topbar activeNav="globe" />
+
+      {/* Body grid */}
+      <div className="body-grid">
+        {/* Left Panel */}
+        <LeftPanel selected={selectedSatellite} stats={stats} events={events} />
+
+        {/* Center: Viewport with Earth, HUD, Timeline */}
+        <div style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
+          {/* Earth Scene */}
+          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+            {loading ? (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%',
+                  color: 'var(--text-md)',
+                  fontSize: '12px',
+                }}
+              >
+                Loading satellites...
+              </div>
+            ) : (
+              <>
+                <EarthScene satellites={satellites} />
+                <HudOverlay selected={selectedSatellite} />
+              </>
+            )}
+          </div>
+
+          {/* Timeline */}
+          <Timeline progress={timelineProgress} onProgressChange={setTimelineProgress} />
+        </div>
+
+        {/* Right Panel */}
+        <RightPanel
+          satellites={satellites}
+          selected={selectedSatellite}
+          onSelect={handleSatelliteSelect}
+        />
+      </div>
+
+      {/* StatusBar */}
+      <StatusBar totalObjects={satellites.length} />
+
+      {/* Modal */}
+      {showModal && (
+        <SatelliteModal satellite={selectedSatellite} onClose={() => setShowModal(false)} />
+      )}
+    </div>
+  );
+}
+
+export default App;

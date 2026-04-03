@@ -1,44 +1,39 @@
-import { useEffect, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, Stars } from '@react-three/drei';
-import { useFrame } from 'react-three-fiber';
+import { OrbitControls, Environment } from '@react-three/drei';
+import Earth from './Earth';
+import type { Satellite3D } from '../../types/satellite';
 
-const EarthScene = () => {
-  const ref = useRef();
-  const [hovered, setHovered] = useState(false);
-  const [active, setActive] = useState(false);
+interface EarthSceneProps {
+  satellites?: Satellite3D[];
+}
 
-  useFrame((state, delta) => {
-    if (ref.current) {
-      ref.current.rotation.y -= delta * 0.5;
-    }
-  });
-
+const EarthScene = (_: EarthSceneProps) => {
   return (
-    <group>
-      <ambientLight intensity={0.3} />
-      <pointLight position={[10, 10, 10]} />
-      <mesh
-        ref={ref}
-        scale={0.5}
-        onClick={() => setActive(!active)}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
+    <div className="viewport">
+      <Canvas
+        camera={{ position: [0, 0, 15], fov: 45 }}
+        style={{ width: '100%', height: '100%' }}
       >
-        <sphereGeometry args={[1, 64, 64]} />
-        <meshStandardMaterial metalness={0.2} roughness={0.8} />
-      </mesh>
-      <OrbitControls enableZoom={false} enablePan={false} />
-      <Environment preset="sunset" />
-      <Stars 
-        radius={100}
-        depth={50}
-        count={5000}
-        factor={4}
-        saturation={0}
-        fade={true}
-      />
-    </group>
+        {/* Lighting */}
+        <ambientLight intensity={0.5} />
+        <pointLight position={[10, 10, 10]} intensity={1} />
+        <pointLight position={[-10, -10, 5]} intensity={0.3} />
+
+        {/* Earth */}
+        <Earth />
+
+        {/* Controls */}
+        <OrbitControls
+          enableZoom={true}
+          enablePan={true}
+          autoRotate={true}
+          autoRotateSpeed={0.5}
+        />
+
+        {/* Environment */}
+        <Environment preset="night" />
+      </Canvas>
+    </div>
   );
 };
 

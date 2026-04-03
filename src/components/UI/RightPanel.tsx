@@ -1,126 +1,154 @@
-import type { Satellite3D, SatelliteEvent } from '../../types/satellite';
+import { useState } from 'react';
+import type { Satellite3D, OrbitType } from '../../types/satellite';
 
-const EVT_ICONS: Record<string, string> = {
-  approach: '⚠',
-  tle:      '↻',
-  signal:   '◉',
-  debris:   '◈',
-  pass:     '↗',
+type FilterType = 'all' | OrbitType;
+
+const ORBIT_COLORS: Record<string, string> = {
+  LEO: '#7a9e7a',
+  MEO: '#9e8f6a',
+  GEO: '#7a80a8',
+  HEO: '#9e8f6a',
+  DEBRIS: '#8a4a4a',
 };
 
 interface RightPanelProps {
-  selected: Satellite3D | null;
-  events: SatelliteEvent[];
-  stats: { total: number; leo: number; meo: number; geo: number; heo: number };
+  satellites?: Satellite3D[];
+  selected?: Satellite3D | null;
+  onSelect?: (sat: Satellite3D) => void;
 }
 
-export function RightPanel({ selected, events, stats }: RightPanelProps) {
+export function RightPanel({ satellites = [], selected, onSelect }: RightPanelProps) {
+  const [filter, setFilter] = useState<FilterType>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [lastUpdate] = useState(new Date());
+
+  // Filter satellites
+  const filtered = satellites
+    .filter((sat) => {
+      if (filter !== 'all' && sat.orbitType !== filter) return false;
+      if (searchQuery && !sat.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      return true;
+    });
+
   return (
-    <aside className="panel panel-right">
-      {/* ── Stats section ── */}
+    <aside className="panel right-panel">
+      {/* Header */}
       <div className="sec-head">
-        <span className="sec-title">Overview</span>
+        <h3 className="sec-head-title">Satellite Feed</h3>
+        <span className="sec-head-badge">{filtered.length}</span>
       </div>
 
-      <div className="data-grid">
-        <div className="dc">
-          <div className="dc-label">Total</div>
-          <div className="dc-value">{stats.total}</div>
-        </div>
-        <div className="dc">
-          <div className="dc-label">LEO</div>
-          <div className="dc-value" style={{ color: 'var(--cat-a)' }}>{stats.leo}</div>
-        </div>
-        <div className="dc">
-          <div className="dc-label">MEO</div>
-          <div className="dc-value" style={{ color: 'var(--cat-b)' }}>{stats.meo}</div>
-        </div>
-        <div className="dc">
-          <div className="dc-label">GEO</div>
-          <div className="dc-value" style={{ color: 'var(--cat-c)' }}>{stats.geo}</div>
-        </div>
+      {/* Search Input */}
+      <div style={{ padding: '10px', borderBottom: '1px solid var(--border)' }}>
+        <input
+          type="text"
+          placeholder="Search objects..."
+          className="search-input"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
       </div>
 
-      {/* ── Selected satellite detail ── */}
-      {selected ? (
-        <>
-          <div className="sec-head" style={{ marginTop: 4 }}>
-            <span className="sec-title">Selected Object</span>
-            <span className="sec-badge">{selected.id}</span>
-          </div>
-
-          <div style={{ padding: '0 0 4px 0' }}>
-            <div className="orbital-row">
-              <span className="orbital-label">Name</span>
-              <span className="orbital-value" style={{ fontSize: 10, maxWidth: 160, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {selected.name}
-              </span>
-            </div>
-            <div className="orbital-row">
-              <span className="orbital-label">Country</span>
-              <span className="orbital-value">{selected.country}</span>
-            </div>
-            <div className="orbital-row">
-              <span className="orbital-label">Altitude</span>
-              <span className="orbital-value">{selected.alt.toFixed(0)} <span style={{ color: 'var(--text-lo)', fontSize: 9 }}>km</span></span>
-            </div>
-            <div className="orbital-row">
-              <span className="orbital-label">Velocity</span>
-              <span className="orbital-value">{selected.velocity.toFixed(2)} <span style={{ color: 'var(--text-lo)', fontSize: 9 }}>km/s</span></span>
-            </div>
-            <div className="orbital-row">
-              <span className="orbital-label">Inclination</span>
-              <span className="orbital-value">{selected.inclination.toFixed(2)}°</span>
-            </div>
-            <div className="orbital-row">
-              <span className="orbital-label">Period</span>
-              <span className="orbital-value">{selected.period.toFixed(1)} <span style={{ color: 'var(--text-lo)', fontSize: 9 }}>min</span></span>
-            </div>
-            <div className="orbital-row">
-              <span className="orbital-label">Eccentricity</span>
-              <span className="orbital-value">{selected.eccentricity.toFixed(4)}</span>
-            </div>
-            <div className="orbital-row">
-              <span className="orbital-label">Orbit</span>
-              <span className={`pill pill-${selected.orbitType.toLowerCase()}`}>{selected.orbitType}</span>
-            </div>
-          </div>
-
-          <div className="coord-row" style={{ margin: '0 12px 12px' }}>
-            <div className="coord-cell">
-              <div className="coord-label">Lat</div>
-              <div className="coord-value">{selected.lat.toFixed(4)}°</div>
-            </div>
-            <div className="coord-cell">
-              <div className="coord-label">Lng</div>
-              <div className="coord-value">{selected.lng.toFixed(4)}°</div>
-            </div>
-          </div>
-        </>
-      ) : (
-        <div style={{ padding: '12px 13px' }}>
-          <div className="loading-text" style={{ fontSize: 9 }}>Select a satellite to view details</div>
-        </div>
-      )}
-
-      {/* ── Event log ── */}
-      <div className="sec-head">
-        <span className="sec-title">Event Log</span>
-        <span className="sec-badge">{events.length}</span>
-      </div>
-
-      <div className="panel-scroll">
-        {events.map(evt => (
-          <div key={evt.id} className="evt-row">
-            <div className={`evt-icon ${evt.type}`}>
-              {EVT_ICONS[evt.type] ?? '·'}
-            </div>
-            <div>
-              <div className="evt-title">{evt.title}</div>
-              <div className="evt-meta">{evt.meta}</div>
-            </div>
-          </div>
+      {/* Filter Chips */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '6px',
+          padding: '10px',
+          borderBottom: '1px solid var(--border)',
+          flexWrap: 'wrap',
+        }}
+      >
+        {(['all', 'LEO', 'MEO', 'GEO', 'DEBRIS'] as FilterType[]).map((f) => (
+          <button
+            key={f}
+            className={`chip ${filter === f ? 'on' : ''}`}
+            onClick={() => setFilter(f)}
+          >
+            {f.toUpperCase()}
+          </button>
         ))}
+      </div>
+
+      {/* Satellite List */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {filtered.length > 0 ? (
+            filtered.map((sat) => {
+              const isSelected = selected?.id === sat.id;
+              const dotColor = ORBIT_COLORS[sat.orbitType] || 'var(--text-lo)';
+              return (
+                <div
+                  key={sat.id}
+                  className={`sat-row ${isSelected ? 'on' : ''}`}
+                  onClick={() => onSelect?.(sat)}
+                >
+                  <div className="sat-row-dot" style={{ background: dotColor }} />
+                  <div className="sat-row-content">
+                    <div className="sat-row-name">{sat.name}</div>
+                    <div className="sat-row-meta">
+                      <span>{sat.alt.toFixed(0)} km</span>
+                      <span>{sat.velocity.toFixed(1)} km/s</span>
+                      <span>#{sat.id}</span>
+                    </div>
+                  </div>
+                  <div className="sat-row-right">
+                    <div className="sat-row-altitude">{sat.alt.toFixed(0)} km</div>
+                    <span className={`pill ${sat.orbitType.toLowerCase()}`}>{sat.orbitType}</span>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div style={{ padding: '20px', color: 'var(--text-lo)', textAlign: 'center', fontSize: '10px' }}>
+              No objects found
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div
+        style={{
+          padding: '10px',
+          borderTop: '1px solid var(--border)',
+          background: 'var(--bg-panel2)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '9px',
+          color: 'var(--text-md)',
+        }}
+      >
+        <span>
+          Updated{' '}
+          {lastUpdate.getUTCHours().toString().padStart(2, '0')}:
+          {lastUpdate.getUTCMinutes().toString().padStart(2, '0')} UTC
+        </span>
+        <button
+          style={{
+            background: 'none',
+            border: '1px solid var(--border)',
+            color: 'var(--text-md)',
+            padding: '4px 8px',
+            borderRadius: '2px',
+            cursor: 'pointer',
+            fontSize: '9px',
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            const target = e.currentTarget as HTMLButtonElement;
+            target.style.color = 'var(--text-hi)';
+            target.style.borderColor = 'var(--border-med)';
+          }}
+          onMouseLeave={(e) => {
+            const target = e.currentTarget as HTMLButtonElement;
+            target.style.color = 'var(--text-md)';
+            target.style.borderColor = 'var(--border)';
+          }}
+        >
+          Refresh
+        </button>
       </div>
     </aside>
   );

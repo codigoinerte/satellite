@@ -148,13 +148,13 @@ function OrbitLine({ position }: { position: [number, number, number] }) {
   const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
 
   return (
-    <line geometry={lineGeometry}>
+    <lineSegments geometry={lineGeometry}>
       <lineBasicMaterial
         color="#ff00ff"
         transparent
         opacity={0.3}
         linewidth={2}
       />
-    </line>
+    </lineSegments>
   );
 }

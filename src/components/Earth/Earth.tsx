@@ -1,109 +1,96 @@
-import { useRef } from 'react';
-import { useFrame, useLoader } from '@react-three/fiber';
-import { TextureLoader } from 'three';
+import { useRef, useMemo } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-export function Earth() {
+export default function Earth() {
   const earthRef = useRef<THREE.Mesh>(null);
+  const atmosphereRef = useRef<THREE.Mesh>(null);
+  const gridRef = useRef<THREE.Mesh>(null);
 
-  // Para una versión más realista, puedes descargar texturas de la Tierra
-  // Por ahora usamos colores procedurales
+  // Create orbital rings
+  const rings = useMemo(() => {
+    const ringGeometries: Array<{ geometry: THREE.BufferGeometry; color: string }> = [];
+    const altitudes = [408, 550, 870, 20200, 35786]; // LEO, MEO, GEO altitudes
+    const colors = ['#7a9e7a', '#9e8f6a', '#7a80a8', '#9e8f6a', '#7a80a8'];
+
+    altitudes.forEach((alt, i) => {
+      const radius = 5 + (alt / 6371) * 0.8;
+      const geometry = new THREE.BufferGeometry();
+      const points = [];
+      for (let j = 0; j <= 64; j++) {
+        const angle = (j / 64) * Math.PI * 2;
+        points.push(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+      }
+      geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(points), 3));
+      ringGeometries.push({ geometry, color: colors[i] });
+    });
+    return ringGeometries;
+  }, []);
+
   useFrame(() => {
     if (earthRef.current) {
-      earthRef.current.rotation.y += 0.001; // Rotación lenta
+      earthRef.current.rotation.y += 0.0002;
+    }
+    if (atmosphereRef.current) {
+      atmosphereRef.current.rotation.y += 0.0002;
+    }
+    if (gridRef.current) {
+      gridRef.current.rotation.y += 0.0002;
     }
   });
 
   return (
     <group>
-      {/* Tierra */}
-      <mesh ref={earthRef}>
+      {/* Earth sphere */}
+      <mesh ref={earthRef} castShadow receiveShadow>
         <sphereGeometry args={[5, 64, 64]} />
         <meshPhongMaterial
-          color="#0a4d68"
+          color="#0a3d5c"
           emissive="#001a2e"
-          specular="#00fff9"
-          shininess={25}
+          specular="#333333"
+          shininess={5}
           opacity={0.95}
           transparent
         />
       </mesh>
 
-      {/* Atmósfera */}
-      <mesh scale={1.02}>
+      {/* Atmosphere glow */}
+      <mesh ref={atmosphereRef} scale={1.015}>
         <sphereGeometry args={[5, 64, 64]} />
         <meshPhongMaterial
-          color="#00fff9"
+          color="#1a5f7a"
           transparent
-          opacity={0.1}
+          opacity={0.08}
           side={THREE.BackSide}
+          emissive="#0a3d5c"
+          emissiveIntensity={0.2}
         />
       </mesh>
 
-      {/* Grid sobre la Tierra */}
-      <mesh>
+      {/* Grid lines on sphere */}
+      <mesh ref={gridRef}>
         <sphereGeometry args={[5.01, 32, 32]} />
         <meshBasicMaterial
-          color="#00fff9"
+          color="#2a7a9a"
           wireframe
           transparent
-          opacity={0.1}
+          opacity={0.15}
         />
       </mesh>
 
-      {/* Luz ambiente */}
-      <ambientLight intensity={0.3} />
-
-      {/* Luz direccional (sol) */}
-      <directionalLight
-        position={[10, 5, 5]}
-        intensity={1.5}
-        color="#ffffff"
-      />
-
-      {/* Luz de relleno */}
-      <pointLight
-        position={[-10, -5, -5]}
-        intensity={0.5}
-        color="#00fff9"
-      />
-
-      {/* Estrellas de fondo */}
-      <Stars />
+      {/* Orbital rings */}
+      {rings.map((ring, i) => (
+        <lineSegments key={`ring-${i}`}>
+          <bufferGeometry attach="geometry" {...ring.geometry} />
+          <lineBasicMaterial
+            attach="material"
+            color={ring.color}
+            transparent
+            opacity={0.3}
+            linewidth={1}
+          />
+        </lineSegments>
+      ))}
     </group>
   );
-}
-
-function Stars() {
-  const starsRef = useRef<THREE.Points>(null);
-
-  const starsGeometry = new THREE.BufferGeometry();
-  const starsMaterial = new THREE.PointsMaterial({
-    color: '#00fff9',
-    size: 0.05,
-    transparent: true,
-    opacity: 0.8,
-  });
-
-  const starsVertices = [];
-  for (let i = 0; i < 5000; i++) {
-    const x = (Math.random() - 0.5) * 200;
-    const y = (Math.random() - 0.5) * 200;
-    const z = (Math.random() - 0.5) * 200;
-    starsVertices.push(x, y, z);
-  }
-
-  starsGeometry.setAttribute(
-    'position',
-    new THREE.Float32BufferAttribute(starsVertices, 3)
-  );
-
-  useFrame(() => {
-    if (starsRef.current) {
-      starsRef.current.rotation.y += 0.0001;
-      starsRef.current.rotation.x += 0.00005;
-    }
-  });
-
-  return <points ref={starsRef} geometry={starsGeometry} material={starsMaterial} />;
 }
