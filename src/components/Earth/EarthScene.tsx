@@ -12,7 +12,7 @@ const EarthScene = (_: EarthSceneProps) => {
     <div className="viewport">
       <Canvas
         camera={{ position: [0, 2, 14], fov: 42 }}
-        style={{ width: '100%', height: '100%', background: 'transparent' }}
+        style={{ width: '100%', height: '100%', background: 'transparent', flex: 1 }}
         gl={{ alpha: true, antialias: true }}
       >
         {/* Lighting - NEW SETUP */}

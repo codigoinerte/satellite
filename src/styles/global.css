@@ -839,8 +839,11 @@ canvas[id="dot-canvas"] {
 /* Center viewport */
 .viewport {
   position: relative;
+  width: 100%;
+  height: 100%;
   background: transparent;
   overflow: hidden;
+  display: flex;
 }
 
 .viewport::before {
