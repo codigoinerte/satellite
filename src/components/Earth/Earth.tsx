@@ -1,6 +1,7 @@
 import { useRef, useMemo, useState, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import type { Satellite3D } from '../../types/satellite';
 
 // ─── Texture URLs (same as three.js TSL earth example) ──────────────────────
 const TEXTURE_URLS = {
@@ -266,8 +267,91 @@ function EarthWithTextures({
   );
 }
 
+// ─── Satellite Orbit Trajectory ──────────────────────────────────────────────
+const GLOBE_RADIUS = 5;
+const RE = 6371.0;
+
+function latLngAltToVec3(lat: number, lng: number, alt: number): THREE.Vector3 {
+  const phi = (90 - lat) * (Math.PI / 180);
+  const theta = (lng + 180) * (Math.PI / 180);
+  const r = GLOBE_RADIUS + (alt / RE) * 0.8;
+  return new THREE.Vector3(
+    -r * Math.sin(phi) * Math.cos(theta),
+     r * Math.cos(phi),
+     r * Math.sin(phi) * Math.sin(theta),
+  );
+}
+
+function SatelliteOrbit({ satellite }: { satellite: Satellite3D }) {
+  const markerRef = useRef<THREE.Mesh>(null);
+
+  const { orbitLineObj, currentPos } = useMemo(() => {
+    const inc = satellite.inclination * (Math.PI / 180);
+    const safeInc = Math.max(Math.abs(inc), 0.001);
+    const latRad = satellite.lat * (Math.PI / 180);
+    const lngRad = satellite.lng * (Math.PI / 180);
+
+    // Compute argument of latitude from current position
+    const sinArgLat = Math.sin(latRad) / Math.sin(safeInc);
+    const argLat = Math.asin(Math.max(-1, Math.min(1, sinArgLat)));
+    // Determine ascending node longitude
+    const ascNodeLng = lngRad - Math.atan2(
+      Math.sin(argLat) * Math.cos(inc),
+      Math.cos(argLat)
+    );
+
+    // Generate orbit points (full 360° loop)
+    const points: THREE.Vector3[] = [];
+    const N = 256;
+    for (let i = 0; i <= N; i++) {
+      const u = (i / N) * Math.PI * 2;
+      const lat_i = Math.asin(Math.sin(safeInc) * Math.sin(u)) * (180 / Math.PI);
+      const lng_i = (ascNodeLng + Math.atan2(
+        Math.sin(u) * Math.cos(inc),
+        Math.cos(u)
+      )) * (180 / Math.PI);
+      points.push(latLngAltToVec3(lat_i, lng_i, satellite.alt));
+    }
+
+    const geom = new THREE.BufferGeometry().setFromPoints(points);
+    const mat = new THREE.LineBasicMaterial({ color: 0xff2233, transparent: true, opacity: 0.6 });
+    const lineObj = new THREE.Line(geom, mat);
+
+    const currentPos = latLngAltToVec3(satellite.lat, satellite.lng, satellite.alt);
+
+    return { orbitLineObj: lineObj, currentPos };
+  }, [satellite]);
+
+  // Pulse animation for the marker
+  useFrame(({ clock }) => {
+    if (markerRef.current) {
+      const s = 1 + Math.sin(clock.elapsedTime * 3) * 0.2;
+      markerRef.current.scale.set(s, s, s);
+    }
+  });
+
+  return (
+    <group>
+      {/* Orbit trajectory line */}
+      <primitive object={orbitLineObj} />
+
+      {/* Satellite position marker — red diamond */}
+      <mesh ref={markerRef} position={currentPos}>
+        <octahedronGeometry args={[0.12, 0]} />
+        <meshBasicMaterial color={0xff2233} />
+      </mesh>
+
+      {/* Glow ring around marker */}
+      <mesh position={currentPos} rotation={[Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.18, 0.25, 32]} />
+        <meshBasicMaterial color={0xff2233} transparent opacity={0.4} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
 // ─── Main Component — loads textures then renders ────────────────────────────
-export default function Earth() {
+export default function Earth({ selectedSatellite = null }: { selectedSatellite?: Satellite3D | null }) {
   const [textures, setTextures] = useState<{
     day: THREE.Texture;
     night: THREE.Texture;
@@ -308,10 +392,13 @@ export default function Earth() {
   }
 
   return (
-    <EarthWithTextures
-      dayMap={textures.day}
-      nightMap={textures.night}
-      bumpRoughnessCloudsMap={textures.bumpRoughnessClouds}
-    />
+    <group>
+      <EarthWithTextures
+        dayMap={textures.day}
+        nightMap={textures.night}
+        bumpRoughnessCloudsMap={textures.bumpRoughnessClouds}
+      />
+      {selectedSatellite && <SatelliteOrbit satellite={selectedSatellite} />}
+    </group>
   );
 }

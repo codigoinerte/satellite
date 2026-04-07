@@ -1,83 +1,65 @@
 import { useState, useEffect } from 'react';
 
-interface TimelineProps {
-  progress?: number;
-  onProgressChange?: (progress: number) => void;
-}
-
-export function Timeline({ progress = 62, onProgressChange }: TimelineProps) {
-  const [timelineProgress, setTimelineProgress] = useState(progress);
-  const [selectedRange, setSelectedRange] = useState<'1D' | '1W' | '1M'>('1D');
-  const [clock, setClock] = useState('00:00:00 UTC');
-  const [isDragging, setIsDragging] = useState(false);
+export function Timeline() {
+  const [localTime, setLocalTime] = useState('');
+  const [utcTime, setUtcTime] = useState('');
+  const [dayProgress, setDayProgress] = useState(0);
+  const [timezone, setTimezone] = useState('');
 
   useEffect(() => {
-    const updateClock = () => {
+    const update = () => {
       const now = new Date();
-      const h = String(now.getUTCHours()).padStart(2, '0');
-      const m = String(now.getUTCMinutes()).padStart(2, '0');
-      const s = String(now.getUTCSeconds()).padStart(2, '0');
-      setClock(`${h}:${m}:${s}`);
+
+      // Local time
+      const lh = String(now.getHours()).padStart(2, '0');
+      const lm = String(now.getMinutes()).padStart(2, '0');
+      const ls = String(now.getSeconds()).padStart(2, '0');
+      setLocalTime(`${lh}:${lm}:${ls}`);
+
+      // UTC time
+      const uh = String(now.getUTCHours()).padStart(2, '0');
+      const um = String(now.getUTCMinutes()).padStart(2, '0');
+      const us = String(now.getUTCSeconds()).padStart(2, '0');
+      setUtcTime(`${uh}:${um}:${us}`);
+
+      // Day progress (0-100% based on local time)
+      const secondsInDay = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+      setDayProgress((secondsInDay / 86400) * 100);
+
+      // Timezone name
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const offset = -now.getTimezoneOffset();
+        const sign = offset >= 0 ? '+' : '-';
+        const oh = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
+        const om = String(Math.abs(offset) % 60).padStart(2, '0');
+        setTimezone(`${tz} (UTC${sign}${oh}:${om})`);
+      } catch {
+        const offset = -now.getTimezoneOffset();
+        const sign = offset >= 0 ? '+' : '-';
+        const oh = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
+        const om = String(Math.abs(offset) % 60).padStart(2, '0');
+        setTimezone(`UTC${sign}${oh}:${om}`);
+      }
     };
-    updateClock();
-    const id = setInterval(updateClock, 1000);
+
+    update();
+    const id = setInterval(update, 1000);
     return () => clearInterval(id);
   }, []);
 
-  const handleProgressChange = (newProgress: number) => {
-    setTimelineProgress(newProgress);
-    onProgressChange?.(newProgress);
-  };
-
-  const handleMouseDown = () => {
-    setIsDragging(true);
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isDragging) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
-    handleProgressChange(percentage);
-  };
-
   return (
     <div className="timeline">
-      {/* Header with label and range chips */}
+      {/* Header */}
       <div className="timeline-header">
-        <span className="timeline-label">EPOCH</span>
-        <div className="timeline-chips">
-          {(['1D', '1W', '1M'] as const).map((range) => (
-            <button
-              key={range}
-              className={`chip ${selectedRange === range ? 'on' : ''}`}
-              onClick={() => setSelectedRange(range)}
-            >
-              {range}
-            </button>
-          ))}
-        </div>
+        <span className="timeline-label">LOCAL TIME</span>
+        <span style={{ fontSize: '9px', color: 'var(--text-md)' }}>{timezone}</span>
       </div>
 
-      {/* Progress track */}
-      <div
-        className="timeline-track"
-        onMouseMove={handleMouseMove}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-      >
-        <div className="timeline-fill" style={{ width: `${timelineProgress}%` }} />
-        <div
-          className="timeline-head"
-          style={{ left: `${timelineProgress}%` }}
-          onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
-        />
+      {/* Progress track — shows current position in the day */}
+      <div className="timeline-track">
+        <div className="timeline-fill" style={{ width: `${dayProgress}%` }} />
+        <div className="timeline-head" style={{ left: `${dayProgress}%` }} />
       </div>
 
       {/* Hour ticks */}
@@ -89,9 +71,10 @@ export function Timeline({ progress = 62, onProgressChange }: TimelineProps) {
         <span>24:00</span>
       </div>
 
-      {/* Clock */}
-      <div style={{ textAlign: 'right', fontSize: '9px', color: 'var(--text-md)' }}>
-        {clock} UTC
+      {/* Clocks */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: 'var(--text-md)' }}>
+        <span>{localTime} LOCAL</span>
+        <span>{utcTime} UTC</span>
       </div>
     </div>
   );

@@ -24,7 +24,6 @@ function App() {
   });
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [timelineProgress, setTimelineProgress] = useState(62);
 
   // Load satellites on mount
   useEffect(() => {
@@ -94,14 +93,14 @@ function App() {
               </div>
             ) : (
               <>
-                <EarthScene satellites={satellites} />
+                <EarthScene satellites={satellites} selectedSatellite={selectedSatellite} />
                 <HudOverlay selected={selectedSatellite} />
               </>
             )}
           </div>
 
           {/* Timeline */}
-          <Timeline progress={timelineProgress} onProgressChange={setTimelineProgress} />
+          <Timeline />
         </div>
 
         {/* Right Panel */}

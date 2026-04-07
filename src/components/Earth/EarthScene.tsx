@@ -5,9 +5,10 @@ import type { Satellite3D } from '../../types/satellite';
 
 interface EarthSceneProps {
   satellites?: Satellite3D[];
+  selectedSatellite?: Satellite3D | null;
 }
 
-const EarthScene = (_: EarthSceneProps) => {
+const EarthScene = ({ selectedSatellite }: EarthSceneProps) => {
   return (
     <div className="viewport">
       <Canvas
@@ -17,7 +18,7 @@ const EarthScene = (_: EarthSceneProps) => {
       >
         {/* Earth with axial tilt (-23.4°) */}
         <group rotation={[-0.408, 0, 0]}>
-          <Earth />
+          <Earth selectedSatellite={selectedSatellite ?? null} />
         </group>
 
         {/* Controls */}
