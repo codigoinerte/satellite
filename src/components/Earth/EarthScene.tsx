@@ -15,12 +15,6 @@ const EarthScene = (_: EarthSceneProps) => {
         style={{ width: '100%', height: '100%', background: 'transparent', flex: 1 }}
         gl={{ alpha: true, antialias: true }}
       >
-        {/* Minimal ambient — the custom shader handles its own lighting */}
-        <ambientLight intensity={0.05} />
-
-        {/* Sun — matches sunDirection uniform in the shader */}
-        <directionalLight position={[1, 0.3, 1]} intensity={1.5} color="#ffffff" />
-
         {/* Earth with axial tilt (-23.4°) */}
         <group rotation={[-0.408, 0, 0]}>
           <Earth />

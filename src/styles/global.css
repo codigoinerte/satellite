@@ -846,14 +846,6 @@ canvas[id="dot-canvas"] {
   display: flex;
 }
 
-.viewport::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 60% 60% at 50% 55%, rgba(50, 51, 56, 0.8) 0%, transparent 70%);
-  pointer-events: none;
-  z-index: 1;
-}
 
 /* Flexbox Utilities */
 .flex-row {

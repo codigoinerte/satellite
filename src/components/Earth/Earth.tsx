@@ -2,13 +2,12 @@ import { useRef, useMemo, useState, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-// ─── Texture URLs (open-source CDN) ─────────────────────────────────────────
+// ─── Texture URLs (same as three.js TSL earth example) ──────────────────────
 const TEXTURE_URLS = {
-  day: 'https://unpkg.com/three-globe@2.31.1/example/img/earth-day.jpg',
-  night: 'https://unpkg.com/three-globe@2.31.1/example/img/earth-night.jpg',
-  bump: 'https://unpkg.com/three-globe@2.31.1/example/img/earth-topology.png',
-  specular: 'https://unpkg.com/three-globe@2.31.1/example/img/earth-water.png',
-  clouds: 'https://unpkg.com/three-globe@2.31.1/example/img/earth-clouds.png',
+  day: 'https://threejs.org/examples/textures/planets/earth_day_4096.jpg',
+  night: 'https://threejs.org/examples/textures/planets/earth_night_4096.jpg',
+  // R = bump height, G = roughness, B = clouds
+  bumpRoughnessClouds: 'https://threejs.org/examples/textures/planets/earth_bump_roughness_clouds_4096.jpg',
 };
 
 // ─── Globe Vertex Shader ─────────────────────────────────────────────────────
@@ -26,13 +25,14 @@ const globeVertexShader = /* glsl */ `
   }
 `;
 
-// ─── Globe Fragment Shader (replicates TSL earth logic in GLSL) ──────────────
+// ─── Globe Fragment Shader (replicates three.js TSL earth example in GLSL) ──
 const globeFragmentShader = /* glsl */ `
   uniform sampler2D dayTexture;
   uniform sampler2D nightTexture;
-  uniform sampler2D bumpTexture;
-  uniform sampler2D specularTexture;
+  uniform sampler2D bumpRoughnessCloudsTexture;
   uniform vec3 sunDirection;
+  uniform float roughnessLow;
+  uniform float roughnessHigh;
 
   varying vec2 vUv;
   varying vec3 vNormalW;
@@ -43,7 +43,7 @@ const globeFragmentShader = /* glsl */ `
     vec3 viewDir = normalize(cameraPosition - vPositionW);
     vec3 sunDir = normalize(sunDirection);
 
-    // ── Sun orientation: how much does this pixel face the sun? ──
+    // ── Sun orientation ──
     float sunOrientation = dot(normal, sunDir);
 
     // ── Fresnel: 0 at center, 1 at edges ──
@@ -52,35 +52,44 @@ const globeFragmentShader = /* glsl */ `
     // ── Sample textures ──
     vec3 dayColor = texture2D(dayTexture, vUv).rgb;
     vec3 nightColor = texture2D(nightTexture, vUv).rgb;
-    float bumpValue = texture2D(bumpTexture, vUv).r;
-    float waterMask = texture2D(specularTexture, vUv).r;
+    vec4 brc = texture2D(bumpRoughnessCloudsTexture, vUv);
+    // R = bump, G = roughness, B = clouds
+    float roughnessValue = brc.g;
+    float cloudsStrength = smoothstep(0.2, 1.0, brc.b);
 
-    // ── Simple cloud approximation from bump high-frequency ──
-    float clouds = smoothstep(0.6, 0.9, bumpValue) * 0.3;
-    dayColor = mix(dayColor, vec3(1.0), clouds);
+    // ── Clouds blended into day color (white overlay, clamped) ──
+    dayColor = mix(dayColor, vec3(1.0), min(cloudsStrength * 2.0, 1.0));
 
-    // ── Diffuse lighting (Lambert) ──
+    // ── Roughness: combine texture roughness with clouds ──
+    float roughness = max(roughnessValue, step(0.01, cloudsStrength));
+    roughness = mix(roughnessLow, roughnessHigh, roughness);
+
+    // ── Diffuse lighting (Lambert) with light intensity 2.0 ──
     float diffuse = max(0.0, dot(normal, sunDir));
-    vec3 litDayColor = dayColor * (0.15 + 0.85 * diffuse);
+    float lightIntensity = 2.0;
+    vec3 litDayColor = dayColor * diffuse * lightIntensity;
 
-    // ── Specular highlight (Blinn-Phong) — ocean only ──
+    // ── PBR-approximate specular (GGX-like distribution) ──
+    // The three.js TSL example uses MeshStandardNodeMaterial (PBR),
+    // so we approximate with a broad, energy-conserving specular.
     vec3 halfDir = normalize(sunDir + viewDir);
-    float spec = pow(max(0.0, dot(normal, halfDir)), 40.0);
-    // Water is shiny, land is matte
-    spec *= waterMask * (1.0 - clouds) * diffuse;
-    litDayColor += vec3(0.4, 0.4, 0.5) * spec;
+    float NdotH = max(0.0, dot(normal, halfDir));
+    float alpha2 = roughness * roughness * roughness * roughness; // roughness^4 for GGX
+    float denom = NdotH * NdotH * (alpha2 - 1.0) + 1.0;
+    float D = alpha2 / (3.14159 * denom * denom);
+    float spec = D * (1.0 - roughness) * 0.04 * diffuse;
+    litDayColor += vec3(1.0) * spec;
 
     // ── Day/Night blend ──
-    // smoothstep(-0.25, 0.5): matches the three.js TSL example
     float dayStrength = smoothstep(-0.25, 0.5, sunOrientation);
     vec3 earthColor = mix(nightColor, litDayColor, dayStrength);
 
-    // ── Atmosphere color: all blue tones ──
-    vec3 atmBrightColor = vec3(0.4, 0.7, 1.0);
-    vec3 atmDimColor = vec3(0.15, 0.35, 0.65);
+    // ── Atmosphere color: bright blue (day) ↔ dim blue (twilight) ──
+    vec3 atmDayColor = vec3(0.302, 0.698, 1.0);      // #4db2ff
+    vec3 atmTwilightColor = vec3(0.15, 0.35, 0.65);  // dim blue
     vec3 atmosphereColor = mix(
-      atmDimColor,
-      atmBrightColor,
+      atmTwilightColor,
+      atmDayColor,
       smoothstep(-0.25, 0.75, sunOrientation)
     );
 
@@ -121,17 +130,17 @@ const atmosphereFragmentShader = /* glsl */ `
     float sunOrientation = dot(normal, sunDir);
     float fresnel = 1.0 - abs(dot(viewDir, normal));
 
-    // Atmosphere visible only at edges (fresnel > 0.65)
-    float alpha = pow(clamp((fresnel - 0.65) / 0.35, 0.0, 1.0), 3.0);
+    // Atmosphere alpha: remap fresnel [0.73, 1] → [1, 0], then pow(3)
+    float alpha = pow(clamp((fresnel - 0.73) / (1.0 - 0.73), 0.0, 1.0), 3.0);
     // Only on sun-facing side
     alpha *= smoothstep(-0.5, 1.0, sunOrientation);
 
-    // Atmosphere color — all blue tones
-    vec3 atmBrightColor = vec3(0.4, 0.7, 1.0);
-    vec3 atmDimColor = vec3(0.15, 0.35, 0.65);
+    // Atmosphere color: bright blue (day) ↔ dim blue (twilight)
+    vec3 atmDayColor = vec3(0.302, 0.698, 1.0);      // #4db2ff
+    vec3 atmTwilightColor = vec3(0.15, 0.35, 0.65);  // dim blue
     vec3 atmosphereColor = mix(
-      atmDimColor,
-      atmBrightColor,
+      atmTwilightColor,
+      atmDayColor,
       smoothstep(-0.25, 0.75, sunOrientation)
     );
 
@@ -178,30 +187,27 @@ function createOrbitalRings() {
 
   createRing(6.5, 72, 0, 0xa0c8d8, 0.5);
   createRing(7.5, 60, 42, 0x80a8c8, 0.35, { dashSize: 0.4, gapSize: 0.2 });
-  createRing(8.5, 54, -22, 0xa62c2e, 0.4, { dashSize: 0.1, gapSize: 0.15 });
+  createRing(8.5, 54, -22, 0x2c6ea6, 0.4, { dashSize: 0.1, gapSize: 0.15 });
 
   return group;
 }
 
 // ─── Earth with Shader Materials ─────────────────────────────────────────────
 function EarthWithTextures({
-  dayMap, nightMap, bumpMap, specularMap, cloudsMap,
+  dayMap, nightMap, bumpRoughnessCloudsMap,
 }: {
   dayMap: THREE.Texture;
   nightMap: THREE.Texture;
-  bumpMap: THREE.Texture;
-  specularMap: THREE.Texture;
-  cloudsMap: THREE.Texture | null;
+  bumpRoughnessCloudsMap: THREE.Texture;
 }) {
   const globeRef = useRef<THREE.Mesh>(null);
   const atmosphereRef = useRef<THREE.Mesh>(null);
-  const cloudsRef = useRef<THREE.Mesh>(null);
   const ringsRef = useRef<THREE.Group>(null);
 
   const ringsGroup = useMemo(() => createOrbitalRings(), []);
 
-  // Sun direction uniform — shared between globe and atmosphere
-  const sunDir = useMemo(() => new THREE.Vector3(1, 0.3, 1).normalize(), []);
+  // Sun direction — matching three.js example: (0, 0, 3) normalized → (0, 0, 1)
+  const sunDir = useMemo(() => new THREE.Vector3(0, 0, 1).normalize(), []);
 
   // Globe ShaderMaterial
   const globeMaterial = useMemo(() => {
@@ -211,12 +217,13 @@ function EarthWithTextures({
       uniforms: {
         dayTexture: { value: dayMap },
         nightTexture: { value: nightMap },
-        bumpTexture: { value: bumpMap },
-        specularTexture: { value: specularMap },
+        bumpRoughnessCloudsTexture: { value: bumpRoughnessCloudsMap },
         sunDirection: { value: sunDir },
+        roughnessLow: { value: 0.25 },
+        roughnessHigh: { value: 0.35 },
       },
     });
-  }, [dayMap, nightMap, bumpMap, specularMap, sunDir]);
+  }, [dayMap, nightMap, bumpRoughnessCloudsMap, sunDir]);
 
   // Atmosphere ShaderMaterial
   const atmosphereMaterial = useMemo(() => {
@@ -236,31 +243,15 @@ function EarthWithTextures({
     const speed = 0.0003;
     if (globeRef.current) globeRef.current.rotation.y += speed;
     if (atmosphereRef.current) atmosphereRef.current.rotation.y += speed;
-    if (cloudsRef.current) cloudsRef.current.rotation.y += speed * 1.15; // clouds drift slightly faster
     if (ringsRef.current) ringsRef.current.rotation.y += speed * 0.5;
   });
 
   return (
     <group>
-      {/* Globe — single mesh, all day/night/atmosphere in shader */}
+      {/* Globe — single mesh, day/night/clouds/atmosphere all in shader */}
       <mesh ref={globeRef} material={globeMaterial}>
         <sphereGeometry args={[5, 64, 64]} />
       </mesh>
-
-      {/* Cloud layer — separate mesh slightly above surface */}
-      {cloudsMap && (
-        <mesh ref={cloudsRef}>
-          <sphereGeometry args={[5.06, 64, 64]} />
-          <meshPhongMaterial
-            map={cloudsMap}
-            transparent
-            opacity={0.35}
-            depthWrite={false}
-            side={THREE.DoubleSide}
-            blending={THREE.NormalBlending}
-          />
-        </mesh>
-      )}
 
       {/* Atmosphere — separate BackSide mesh for edge glow */}
       <mesh ref={atmosphereRef} scale={1.04} material={atmosphereMaterial}>
@@ -280,39 +271,25 @@ export default function Earth() {
   const [textures, setTextures] = useState<{
     day: THREE.Texture;
     night: THREE.Texture;
-    bump: THREE.Texture;
-    specular: THREE.Texture;
-    clouds: THREE.Texture | null;
+    bumpRoughnessClouds: THREE.Texture;
   } | null>(null);
 
   useEffect(() => {
     const loader = new THREE.TextureLoader();
     loader.crossOrigin = 'anonymous';
 
-    // Load core textures (required)
-    const core = Promise.all([
+    Promise.all([
       loader.loadAsync(TEXTURE_URLS.day),
       loader.loadAsync(TEXTURE_URLS.night),
-      loader.loadAsync(TEXTURE_URLS.bump),
-      loader.loadAsync(TEXTURE_URLS.specular),
-    ]);
-
-    // Load clouds texture (optional — don't block if it fails)
-    const cloudsPromise = loader.loadAsync(TEXTURE_URLS.clouds).catch(() => null);
-
-    Promise.all([core, cloudsPromise])
-      .then(([[day, night, bump, specular], clouds]) => {
+      loader.loadAsync(TEXTURE_URLS.bumpRoughnessClouds),
+    ])
+      .then(([day, night, bumpRoughnessClouds]) => {
         day.colorSpace = THREE.SRGBColorSpace;
         day.anisotropy = 8;
         night.colorSpace = THREE.SRGBColorSpace;
         night.anisotropy = 8;
-        bump.anisotropy = 8;
-        specular.anisotropy = 8;
-        if (clouds) {
-          clouds.colorSpace = THREE.SRGBColorSpace;
-          clouds.anisotropy = 8;
-        }
-        setTextures({ day, night, bump, specular, clouds });
+        bumpRoughnessClouds.anisotropy = 8;
+        setTextures({ day, night, bumpRoughnessClouds });
       })
       .catch((err) => {
         console.warn('Failed to load Earth textures:', err);
@@ -334,9 +311,7 @@ export default function Earth() {
     <EarthWithTextures
       dayMap={textures.day}
       nightMap={textures.night}
-      bumpMap={textures.bump}
-      specularMap={textures.specular}
-      cloudsMap={textures.clouds}
+      bumpRoughnessCloudsMap={textures.bumpRoughnessClouds}
     />
   );
 }
