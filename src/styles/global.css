@@ -96,8 +96,7 @@ canvas[id="dot-canvas"] {
 .panel {
   position: relative;
   background: var(--bg-panel);
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
   border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
