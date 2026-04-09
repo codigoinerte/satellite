@@ -21,11 +21,13 @@ const ORBIT_TOOLTIPS: Record<FilterType, { title: string; desc: string }> = {
 };
 
 function OrbitChip({
+  order,
   label,
   filterType,
   active,
   onClick,
 }: {
+  order: number;
   label: string;
   filterType: FilterType;
   active: boolean;
@@ -50,7 +52,8 @@ function OrbitChip({
           style={{
             position: 'absolute',
             top: 'calc(100% + 8px)',
-            right: 0,
+            right: order > 2 ? "-35px" : "auto",
+            left: order > 2 ? "auto" : 0,
             width: '220px',
             background: '#14141f',
             border: '1px solid #2a2a3a',
@@ -66,7 +69,8 @@ function OrbitChip({
             style={{
               position: 'absolute',
               top: '-5px',
-              right: '12px',
+              left: order > 2 ? "auto" : '12px',
+              right:order > 2 ? "40px" : "auto",
               transform: 'rotate(45deg)',
               width: '8px',
               height: '8px',
@@ -148,8 +152,9 @@ export function RightPanel({ satellites = [], selected, onSelect }: RightPanelPr
           flexWrap: 'wrap',
         }}
       >
-        {(['all', 'LEO', 'MEO', 'GEO', 'DEBRIS'] as FilterType[]).map((f) => (
+        {(['all', 'LEO', 'MEO', 'GEO', 'DEBRIS'] as FilterType[]).map((f, i) => (
           <OrbitChip
+            order={i}
             key={f}
             label={f.toUpperCase()}
             filterType={f}

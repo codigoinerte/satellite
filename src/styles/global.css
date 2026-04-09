@@ -96,7 +96,8 @@ canvas[id="dot-canvas"] {
 .panel {
   position: relative;
   background: var(--bg-panel);
-  overflow: visible;
+  overflow-y: auto;
+  overflow-x: hidden;
   border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -843,6 +844,22 @@ canvas[id="dot-canvas"] {
   background: transparent;
   overflow: hidden;
   display: flex;
+}
+
+.earth-camera-controls {
+  position: absolute;
+  right: 10px;
+  top: 124px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 12;
+  pointer-events: auto;
+}
+
+.earth-camera-controls .hud-button {
+  min-width: 78px;
+  text-align: center;
 }
 
 

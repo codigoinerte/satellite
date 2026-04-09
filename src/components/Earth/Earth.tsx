@@ -385,7 +385,11 @@ export default function Earth({ selectedSatellite = null }: { selectedSatellite?
       <group>
         <mesh>
           <sphereGeometry args={[5, 32, 32]} />
-          <meshBasicMaterial color={0x111520} wireframe />
+          <meshBasicMaterial color={0x2d6fb7} transparent opacity={0.95} />
+        </mesh>
+        <mesh scale={1.04}>
+          <sphereGeometry args={[5, 24, 24]} />
+          <meshBasicMaterial color={0x6eb9ff} transparent opacity={0.18} side={THREE.BackSide} />
         </mesh>
       </group>
     );
