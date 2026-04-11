@@ -7,14 +7,8 @@ import {
   degreesLat,
   degreesLong,
 } from 'satellite.js';
-import type { Satellite3D, OrbitType, SatelliteEvent, CelesTrakGP } from '../types/satellite';
+import type { Satellite3D, OrbitType, SatelliteEvent } from '../types/satellite';
 
-// ─── CelesTrak endpoints (free, no API key) ──────────────────────────────────
-// Note: CelesTrak.org updated their API. Using the new endpoint format
-const CELESTRAK_BASE = 'https://celestrak.org/NORAD/elements/gp.php';
-
-// Groups to fetch – kept small for fast load
-const GROUPS = ['stations', 'visual'];
 
 // ─── Country lookup by NORAD ID ───────────────────────────────────────────────
 const COUNTRY_MAP: Record<number, { country: string; code: string }> = {
@@ -90,19 +84,8 @@ export const latLngToVector3 = (
   ];
 };
 
-// ─── TLE text parser ──────────────────────────────────────────────────────────
+// ─── TLE record type ─────────────────────────────────────────────────────────
 interface TLERecord { name: string; tle1: string; tle2: string }
-
-const parseTLEText = (text: string): TLERecord[] => {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  const records: TLERecord[] = [];
-  for (let i = 0; i + 2 < lines.length; i += 3) {
-    if (lines[i + 1].startsWith('1 ') && lines[i + 2].startsWith('2 ')) {
-      records.push({ name: lines[i], tle1: lines[i + 1], tle2: lines[i + 2] });
-    }
-  }
-  return records;
-};
 
 // ─── Propagate TLE to current position ───────────────────────────────────────
 const propagateNow = (
@@ -129,28 +112,14 @@ const propagateNow = (
   }
 };
 
-// ─── Fetch one CelesTrak group (TLE text format) ──────────────────────────────
-const fetchGroup = async (group: string): Promise<TLERecord[]> => {
-  const url = `${CELESTRAK_BASE}?FORMAT=TLE&GROUP=${group}`;
-  const res = await axios.get<string>(url, {
-    responseType: 'text',
-    timeout: 10000,
-  });
-  return parseTLEText(res.data);
-};
-
-// ─── Build Satellite3D from TLE record + GP metadata ─────────────────────────
-const buildSatellite = (rec: TLERecord, gp?: CelesTrakGP): Satellite3D | null => {
+// ─── Build Satellite3D from TLE record ───────────────────────────────────────
+const buildSatellite = (rec: TLERecord): Satellite3D | null => {
   const pos = propagateNow(rec.tle1, rec.tle2);
   if (!pos || isNaN(pos.lat) || isNaN(pos.alt)) return null;
 
-  // Extract NORAD ID from TLE line 1 (chars 2-7)
   const noradId = parseInt(rec.tle1.substring(2, 7).trim(), 10);
-  // Extract inclination from TLE line 2 (chars 8-16)
   const inclination = parseFloat(rec.tle2.substring(8, 16).trim());
-  // Extract mean motion from TLE line 2 (chars 52-63)
   const meanMotion  = parseFloat(rec.tle2.substring(52, 63).trim());
-  // Extract eccentricity from TLE line 2 (chars 26-33, implied decimal)
   const eccentricity = parseFloat('0.' + rec.tle2.substring(26, 33).trim());
 
   const { country, code } = guessCountry(noradId, rec.name);
@@ -158,12 +127,11 @@ const buildSatellite = (rec: TLERecord, gp?: CelesTrakGP): Satellite3D | null =>
   const velocity  = orbitalVelocity(alt);
   const period    = orbitalPeriod(meanMotion);
   const orbitType = getOrbitType(alt);
-  const cosparId  = gp?.OBJECT_ID ?? '';
 
   return {
     id:          noradId,
     name:        rec.name.trim(),
-    cosparId,
+    cosparId:    '',
     position:    latLngToVector3(pos.lat, pos.lng, alt),
     velocity:    parseFloat(velocity.toFixed(2)),
     country,
@@ -171,35 +139,70 @@ const buildSatellite = (rec: TLERecord, gp?: CelesTrakGP): Satellite3D | null =>
     lat:         parseFloat(pos.lat.toFixed(4)),
     lng:         parseFloat(pos.lng.toFixed(4)),
     alt:         parseFloat(alt.toFixed(1)),
-    inclination: parseFloat((gp?.INCLINATION ?? inclination).toFixed(2)),
+    inclination: parseFloat(inclination.toFixed(2)),
     period:      parseFloat(period.toFixed(1)),
-    eccentricity: parseFloat((gp?.ECCENTRICITY ?? eccentricity).toFixed(6)),
+    eccentricity: parseFloat(eccentricity.toFixed(6)),
     orbitType,
   };
 };
 
-// ─── Main: fetch satellites from CelesTrak ────────────────────────────────────
-export const fetchSatellites = async (): Promise<Satellite3D[]> => {
-  const allRecords: TLERecord[] = [];
-  const seen = new Set<number>();
+// ─── TLE API search helper ───────────────────────────────────────────────────
+const searchTleApi = async (query: string, pageSize = 20): Promise<TLERecord[]> => {
+  const url = `${TLE_API_BASE}/?search=${encodeURIComponent(query)}&page-size=${pageSize}`;
+  const res = await axios.get<TleApiResponse>(url, { timeout: 10000 });
+  const records: TLERecord[] = [];
+  for (const m of res.data.member || []) {
+    if (m.line1 && m.line2) {
+      records.push({ name: m.name, tle1: m.line1, tle2: m.line2 });
+    }
+  }
+  return records;
+};
 
-  for (const group of GROUPS) {
-    try {
-      const records = await fetchGroup(group);
-      for (const r of records) {
-        const id = parseInt(r.tle1.substring(2, 7).trim(), 10);
+// Satellite groups to search — covers stations, navigation, weather, science
+const SEARCH_QUERIES = [
+  'ISS',        // ISS + modules
+  'TIANHE',     // Chinese Space Station
+  'NOAA',       // Weather satellites
+  'GPS',        // US navigation
+  'GALILEO',    // EU navigation
+  'SENTINEL',   // EU Earth observation
+  'GOES',       // US geostationary weather
+  'TERRA',      // NASA Earth science
+  'AQUA',       // NASA Earth science
+  'HUBBLE',     // Space telescope
+  'LANDSAT',    // Earth imaging
+  'COSMOS',     // Russian satellites
+  'GLONASS',    // Russian navigation
+  'BEIDOU',     // Chinese navigation
+  'INTELSAT',   // Communications GEO
+  'IRIDIUM',    // LEO communications
+];
+
+// ─── Main: fetch satellites from TLE API ─────────────────────────────────────
+export const fetchSatellites = async (): Promise<Satellite3D[]> => {
+  const seen = new Set<number>();
+  const allRecords: TLERecord[] = [];
+
+  // Fetch all groups in parallel
+  const results = await Promise.allSettled(
+    SEARCH_QUERIES.map(q => searchTleApi(q, 15))
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      for (const rec of result.value) {
+        const id = parseInt(rec.tle1.substring(2, 7).trim(), 10);
         if (!seen.has(id)) {
           seen.add(id);
-          allRecords.push(r);
+          allRecords.push(rec);
         }
       }
-    } catch (err) {
-      console.warn(`CelesTrak group "${group}" failed:`, err);
     }
   }
 
   if (allRecords.length === 0) {
-    console.warn('CelesTrak unreachable — using mock data');
+    console.warn('TLE API unreachable — using mock data');
     return getMockSatellites();
   }
 
