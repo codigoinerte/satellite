@@ -232,7 +232,6 @@ const MOCK_CATALOG = [
   { id: 26900,  name: 'GOES-12',               country: 'United States',  code: 'us', alt: 35786,  inc: 0.1,   mmo:  1.00 },
   { id: 41838,  name: 'GOES-16',               country: 'United States',  code: 'us', alt: 35786,  inc: 0.05,  mmo:  1.00 },
   { id: 25338,  name: 'COSMOS 2307',           country: 'Russia',         code: 'ru', alt: 19100,  inc: 65.09, mmo:  2.13 },
-  { id: 37849,  name: 'TIANGONG-2',            country: 'China',          code: 'cn', alt: 380,    inc: 42.78, mmo: 15.66 },
   { id: 40697,  name: 'RESOURCESAT-2A',        country: 'India',          code: 'in', alt: 817,    inc: 98.72, mmo: 14.24 },
 ];
 
