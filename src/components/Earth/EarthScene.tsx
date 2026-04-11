@@ -9,6 +9,7 @@ import type { Satellite3D } from '../../types/satellite';
 interface EarthSceneProps {
   satellites?: Satellite3D[];
   selectedSatellite?: Satellite3D | null;
+  starlinkSatellites?: Satellite3D[];
 }
 
 const DEFAULT_CAMERA_POSITION = new Vector3(0, 0.4, 24);
@@ -16,7 +17,7 @@ const MIN_CAMERA_DISTANCE = 14;
 const MAX_CAMERA_DISTANCE = 34;
 const ZOOM_STEP = 1.8;
 
-const EarthScene = ({ selectedSatellite }: EarthSceneProps) => {
+const EarthScene = ({ selectedSatellite, starlinkSatellites = [] }: EarthSceneProps) => {
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
 
   useEffect(() => {
@@ -96,7 +97,7 @@ const EarthScene = ({ selectedSatellite }: EarthSceneProps) => {
       >
         {/* Earth with axial tilt (-23.4°) */}
         <group rotation={[-0.408, 0, 0]}>
-          <Earth selectedSatellite={selectedSatellite ?? null} />
+          <Earth selectedSatellite={selectedSatellite ?? null} starlinkSatellites={starlinkSatellites} />
         </group>
 
         {/* Controls */}

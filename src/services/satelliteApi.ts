@@ -353,3 +353,87 @@ export const calcStats = (satellites: Satellite3D[]) => ({
   heo:     satellites.filter(s => s.orbitType === 'HEO').length,
   debris:  0,
 });
+
+// ─── Starlink ─────────────────────────────────────────────────────────────────
+
+export interface StarlinkRegion {
+  id: string;
+  name: string;
+  latMin: number;
+  latMax: number;
+  lngMin: number;
+  lngMax: number;
+}
+
+export const STARLINK_REGIONS: StarlinkRegion[] = [
+  { id: 'all',        name: 'Global',         latMin: -90,  latMax: 90,   lngMin: -180, lngMax: 180 },
+  { id: 'south-am',   name: 'Sudamérica',     latMin: -56,  latMax: 13,   lngMin: -82,  lngMax: -34 },
+  { id: 'central-am', name: 'Centroamérica',  latMin: 7,    latMax: 23,   lngMin: -92,  lngMax: -60 },
+  { id: 'north-am',   name: 'Norteamérica',   latMin: 23,   latMax: 72,   lngMin: -170, lngMax: -50 },
+  { id: 'europe',     name: 'Europa',         latMin: 35,   latMax: 72,   lngMin: -12,  lngMax: 45  },
+  { id: 'asia',       name: 'Asia',           latMin: 0,    latMax: 75,   lngMin: 45,   lngMax: 180 },
+  { id: 'africa',     name: 'África',         latMin: -35,  latMax: 37,   lngMin: -18,  lngMax: 52  },
+  { id: 'oceania',    name: 'Oceanía',        latMin: -50,  latMax: 0,    lngMin: 110,  lngMax: 180 },
+];
+
+// TLE API (free, no auth, works when CelesTrak is down)
+const TLE_API_BASE = 'https://tle.ivanstanojevic.me/api/tle';
+const STARLINK_PAGES_TO_FETCH = 15; // 15 pages × 100 = ~1,500 satellites
+const STARLINK_PAGE_SIZE = 100;
+
+interface TleApiMember {
+  satelliteId: number;
+  name: string;
+  line1: string;
+  line2: string;
+  date: string;
+}
+
+interface TleApiResponse {
+  totalItems: number;
+  member: TleApiMember[];
+}
+
+export const fetchStarlinkTLE = async (): Promise<string> => {
+  // Fetch multiple pages in parallel
+  const pageNumbers = Array.from({ length: STARLINK_PAGES_TO_FETCH }, (_, i) => i + 1);
+
+  const results = await Promise.allSettled(
+    pageNumbers.map(page =>
+      axios.get<TleApiResponse>(`${TLE_API_BASE}/?search=starlink&page-size=${STARLINK_PAGE_SIZE}&page=${page}`, {
+        timeout: 15000,
+      })
+    )
+  );
+
+  // Convert JSON responses back to TLE text format (worker expects TLE text)
+  const lines: string[] = [];
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value.data.member) {
+      for (const m of result.value.data.member) {
+        if (m.line1 && m.line2) {
+          lines.push(m.name);
+          lines.push(m.line1);
+          lines.push(m.line2);
+        }
+      }
+    }
+  }
+
+  if (lines.length === 0) {
+    throw new Error('No Starlink TLE data received');
+  }
+
+  return lines.join('\n');
+};
+
+export const filterByRegion = (
+  satellites: Satellite3D[],
+  region: StarlinkRegion,
+): Satellite3D[] => {
+  if (region.id === 'all') return satellites;
+  return satellites.filter(s =>
+    s.lat >= region.latMin && s.lat <= region.latMax &&
+    s.lng >= region.lngMin && s.lng <= region.lngMax
+  );
+};

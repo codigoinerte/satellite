@@ -195,20 +195,23 @@ function createOrbitalRings() {
 
 // ─── Earth with Shader Materials ─────────────────────────────────────────────
 function EarthWithTextures({
-  dayMap, nightMap, bumpRoughnessCloudsMap,
+  dayMap, nightMap, bumpRoughnessCloudsMap, children,
 }: {
   dayMap: THREE.Texture;
   nightMap: THREE.Texture;
   bumpRoughnessCloudsMap: THREE.Texture;
+  children?: React.ReactNode;
 }) {
   const globeRef = useRef<THREE.Mesh>(null);
   const atmosphereRef = useRef<THREE.Mesh>(null);
   const ringsRef = useRef<THREE.Group>(null);
+  const satGroupRef = useRef<THREE.Group>(null);
 
   const ringsGroup = useMemo(() => createOrbitalRings(), []);
 
-  // Sun direction — matching three.js example: (0, 0, 3) normalized → (0, 0, 1)
-  const sunDir = useMemo(() => new THREE.Vector3(0, 0, 1).normalize(), []);
+  // Sun direction — fixed in world space along +X
+  // The Earth rotates to show correct day/night based on UTC time
+  const sunDir = useMemo(() => new THREE.Vector3(1, 0, 0), []);
 
   // Globe ShaderMaterial
   const globeMaterial = useMemo(() => {
@@ -241,10 +244,27 @@ function EarthWithTextures({
   }, [sunDir]);
 
   useFrame(() => {
-    const speed = 0.0003;
-    if (globeRef.current) globeRef.current.rotation.y += speed;
-    if (atmosphereRef.current) atmosphereRef.current.rotation.y += speed;
-    if (ringsRef.current) ringsRef.current.rotation.y += speed * 0.5;
+    const now = new Date();
+    const utcH = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
+
+    // Earth rotation: align the subsolar longitude with the sun direction (+X)
+    // At 12:00 UTC, longitude 0° (Greenwich) faces the sun → rotation.y = 0
+    // At 00:00 UTC, longitude 180° faces the sun → rotation.y = π
+    const earthAngle = ((utcH - 12) / 24) * Math.PI * 2;
+
+    if (globeRef.current) globeRef.current.rotation.y = earthAngle;
+    if (atmosphereRef.current) atmosphereRef.current.rotation.y = earthAngle;
+    if (satGroupRef.current) satGroupRef.current.rotation.y = earthAngle;
+    if (ringsRef.current) ringsRef.current.rotation.y = earthAngle * 0.3;
+
+    // Update sun direction with seasonal declination
+    // Declination = 23.44° × sin(2π × (dayOfYear - 81) / 365)
+    const start = new Date(now.getUTCFullYear(), 0, 0);
+    const dayOfYear = Math.floor((now.getTime() - start.getTime()) / 86400000);
+    const declination = 23.44 * Math.sin((2 * Math.PI * (dayOfYear - 81)) / 365);
+    const decRad = declination * (Math.PI / 180);
+
+    sunDir.set(Math.cos(decRad), Math.sin(decRad), 0).normalize();
   });
 
   return (
@@ -258,6 +278,11 @@ function EarthWithTextures({
       <mesh ref={atmosphereRef} scale={1.04} material={atmosphereMaterial}>
         <sphereGeometry args={[5, 64, 64]} />
       </mesh>
+
+      {/* Satellites — rotate with the Earth */}
+      <group ref={satGroupRef}>
+        {children}
+      </group>
 
       {/* Orbital rings */}
       <group ref={ringsRef}>
@@ -350,8 +375,50 @@ function SatelliteOrbit({ satellite }: { satellite: Satellite3D }) {
   );
 }
 
+// ─── Shared geometry + material for Starlink instanced spheres ────────────────
+const starlinkSphereGeo = new THREE.SphereGeometry(0.025, 8, 6);
+const starlinkSphereMat = new THREE.MeshBasicMaterial({ color: 0xff8c00 });
+const _dummy = new THREE.Object3D();
+
+// ─── Starlink Spheres (single draw call via InstancedMesh) ───────────────────
+function StarlinkPoints({ satellites }: { satellites: Satellite3D[] }) {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh || satellites.length === 0) return;
+
+    for (let i = 0; i < satellites.length; i++) {
+      _dummy.position.set(
+        satellites[i].position[0],
+        satellites[i].position[1],
+        satellites[i].position[2],
+      );
+      _dummy.updateMatrix();
+      mesh.setMatrixAt(i, _dummy.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.count = satellites.length;
+  }, [satellites]);
+
+  if (satellites.length === 0) return null;
+
+  return (
+    <instancedMesh
+      ref={meshRef}
+      args={[starlinkSphereGeo, starlinkSphereMat, satellites.length]}
+    />
+  );
+}
+
 // ─── Main Component — loads textures then renders ────────────────────────────
-export default function Earth({ selectedSatellite = null }: { selectedSatellite?: Satellite3D | null }) {
+export default function Earth({
+  selectedSatellite = null,
+  starlinkSatellites = [],
+}: {
+  selectedSatellite?: Satellite3D | null;
+  starlinkSatellites?: Satellite3D[];
+}) {
   const [textures, setTextures] = useState<{
     day: THREE.Texture;
     night: THREE.Texture;
@@ -401,8 +468,10 @@ export default function Earth({ selectedSatellite = null }: { selectedSatellite?
         dayMap={textures.day}
         nightMap={textures.night}
         bumpRoughnessCloudsMap={textures.bumpRoughnessClouds}
-      />
-      {selectedSatellite && <SatelliteOrbit satellite={selectedSatellite} />}
+      >
+        {selectedSatellite && <SatelliteOrbit satellite={selectedSatellite} />}
+        {starlinkSatellites.length > 0 && <StarlinkPoints satellites={starlinkSatellites} />}
+      </EarthWithTextures>
     </group>
   );
 }
