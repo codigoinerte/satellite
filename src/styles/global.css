@@ -480,11 +480,30 @@ canvas[id="dot-canvas"] {
   margin-top: 4px;
 }
 
+/* NASA DONKI event types */
+.event-dot.solar { background: rgba(255, 180, 50, 0.85); }
+.event-dot.storm { background: rgba(100, 160, 255, 0.85); }
+.event-dot.radiation { background: rgba(200, 80, 80, 0.85); }
+/* NASA EONET event types */
+.event-dot.fire { background: rgba(220, 100, 40, 0.85); }
+.event-dot.eonet { background: rgba(122, 158, 122, 0.7); }
+/* Legacy types */
 .event-dot.approach { background: rgba(122, 158, 122, 0.7); }
 .event-dot.tle { background: rgba(158, 143, 106, 0.7); }
 .event-dot.signal { background: rgba(122, 128, 168, 0.7); }
 .event-dot.debris { background: rgba(166, 44, 46, 0.7); }
 .event-dot.pass { background: rgba(122, 158, 122, 0.7); }
+
+.event-item.clickable:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.event-time {
+  font-family: 'Space Mono', monospace;
+  font-size: 7px;
+  color: var(--text-lo);
+  margin-top: 1px;
+}
 
 .event-content {
   flex: 1;

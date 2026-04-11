@@ -149,50 +149,6 @@ const atmosphereFragmentShader = /* glsl */ `
   }
 `;
 
-// ─── Orbital Rings ───────────────────────────────────────────────────────────
-function createOrbitalRings() {
-  const group = new THREE.Group();
-
-  const createRing = (
-    radius: number,
-    rotX: number,
-    rotZ: number,
-    color: number,
-    opacity: number,
-    dash?: { dashSize: number; gapSize: number }
-  ) => {
-    const points: number[] = [];
-    for (let i = 0; i <= 256; i++) {
-      const a = (i / 256) * Math.PI * 2;
-      points.push(Math.cos(a) * radius, 0, Math.sin(a) * radius);
-    }
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(points), 3));
-
-    let mat: THREE.Material;
-    if (dash) {
-      mat = new THREE.LineDashedMaterial({
-        color, transparent: true, opacity,
-        dashSize: dash.dashSize, gapSize: dash.gapSize,
-      });
-    } else {
-      mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity });
-    }
-
-    const line = new THREE.Line(geom, mat);
-    line.rotation.x = THREE.MathUtils.degToRad(rotX);
-    line.rotation.z = THREE.MathUtils.degToRad(rotZ);
-    if (dash) line.computeLineDistances();
-    group.add(line);
-  };
-
-  createRing(6.5, 72, 0, 0xa0c8d8, 0.5);
-  createRing(7.5, 60, 42, 0x80a8c8, 0.35, { dashSize: 0.4, gapSize: 0.2 });
-  createRing(8.5, 54, -22, 0x2c6ea6, 0.4, { dashSize: 0.1, gapSize: 0.15 });
-
-  return group;
-}
-
 // ─── Earth with Shader Materials ─────────────────────────────────────────────
 function EarthWithTextures({
   dayMap, nightMap, bumpRoughnessCloudsMap, children,
@@ -204,10 +160,8 @@ function EarthWithTextures({
 }) {
   const globeRef = useRef<THREE.Mesh>(null);
   const atmosphereRef = useRef<THREE.Mesh>(null);
-  const ringsRef = useRef<THREE.Group>(null);
   const satGroupRef = useRef<THREE.Group>(null);
 
-  const ringsGroup = useMemo(() => createOrbitalRings(), []);
 
   // Sun direction — fixed in world space along +X
   // The Earth rotates to show correct day/night based on UTC time
@@ -255,7 +209,7 @@ function EarthWithTextures({
     if (globeRef.current) globeRef.current.rotation.y = earthAngle;
     if (atmosphereRef.current) atmosphereRef.current.rotation.y = earthAngle;
     if (satGroupRef.current) satGroupRef.current.rotation.y = earthAngle;
-    if (ringsRef.current) ringsRef.current.rotation.y = earthAngle * 0.3;
+
 
     // Update sun direction with seasonal declination
     // Declination = 23.44° × sin(2π × (dayOfYear - 81) / 365)
@@ -284,10 +238,6 @@ function EarthWithTextures({
         {children}
       </group>
 
-      {/* Orbital rings */}
-      <group ref={ringsRef}>
-        <primitive object={ringsGroup} />
-      </group>
     </group>
   );
 }

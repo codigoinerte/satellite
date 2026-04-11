@@ -189,11 +189,19 @@ export function LeftPanel({
         <div className="event-log">
           {events.length > 0 ? (
             events.map((evt) => (
-              <div key={evt.id} className="event-item">
+              <div
+                key={evt.id}
+                className={`event-item ${evt.url ? 'clickable' : ''}`}
+                onClick={() => evt.url && window.open(evt.url, '_blank', 'noopener')}
+                style={evt.url ? { cursor: 'pointer' } : undefined}
+              >
                 <div className={`event-dot ${evt.type}`} />
                 <div className="event-content">
                   <div className="event-title">{evt.title}</div>
                   <div className="event-meta">{evt.meta}</div>
+                  <div className="event-time">
+                    {evt.time.toISOString().substring(0, 16).replace('T', ' ')} UTC
+                  </div>
                 </div>
               </div>
             ))

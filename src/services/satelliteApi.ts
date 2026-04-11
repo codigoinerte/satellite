@@ -271,75 +271,102 @@ export const getMockSatellites = (): Satellite3D[] => {
   });
 };
 
-// ─── Event log generator ──────────────────────────────────────────────────────
-export const generateEvents = (satellites: Satellite3D[]): SatelliteEvent[] => {
-  const now   = new Date();
-  const ago   = (m: number) => new Date(now.getTime() - m * 60 * 1000);
-  const tStr  = (d: Date) => d.toISOString().substring(11, 16) + ' UTC';
+// ─── NASA event types ─────────────────────────────────────────────────────────
+
+const NASA_API_KEY = 'DEMO_KEY';
+
+const DONKI_TYPE_MAP: Record<string, { type: SatelliteEvent['type']; label: string }> = {
+  CME:  { type: 'solar',     label: 'Eyección solar (CME)' },
+  GST:  { type: 'storm',     label: 'Tormenta geomagnética' },
+  IPS:  { type: 'solar',     label: 'Choque interplanetario' },
+  FLR:  { type: 'solar',     label: 'Llamarada solar' },
+  SEP:  { type: 'radiation', label: 'Partículas energéticas solares' },
+  MPC:  { type: 'radiation', label: 'Magnetopausa cruzada' },
+  RBE:  { type: 'radiation', label: 'Alerta cinturón de radiación' },
+  HSS:  { type: 'solar',     label: 'Corriente solar de alta velocidad' },
+};
+
+const EONET_TYPE_MAP: Record<string, { type: SatelliteEvent['type']; label: string }> = {
+  'Wildfires':     { type: 'fire',  label: 'Incendio detectado' },
+  'Severe Storms': { type: 'storm', label: 'Tormenta severa' },
+  'Volcanoes':     { type: 'fire',  label: 'Actividad volcánica' },
+  'Sea and Lake Ice': { type: 'eonet', label: 'Evento de hielo' },
+  'Earthquakes':   { type: 'eonet', label: 'Sismo detectado' },
+  'Floods':        { type: 'storm', label: 'Inundación' },
+  'Landslides':    { type: 'eonet', label: 'Deslizamiento' },
+};
+
+// ─── Fetch real events from NASA DONKI + EONET ───────────────────────────────
+export const fetchNasaEvents = async (): Promise<SatelliteEvent[]> => {
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const fmt = (d: Date) => d.toISOString().substring(0, 10);
 
   const events: SatelliteEvent[] = [];
 
-  if (satellites.length >= 2) {
-    const leos = satellites.filter(s => s.orbitType === 'LEO');
-    if (leos.length >= 2) {
+  // ─── DONKI (space weather) ──────────────────────────────────────────────
+  try {
+    const donkiUrl = `https://api.nasa.gov/DONKI/notifications?startDate=${fmt(weekAgo)}&endDate=${fmt(now)}&type=all&api_key=${NASA_API_KEY}`;
+    const donkiRes = await axios.get<Array<{
+      messageType: string;
+      messageIssueTime: string;
+      messageURL: string;
+      messageBody: string;
+    }>>(donkiUrl, { timeout: 10000 });
+
+    for (const n of donkiRes.data.slice(0, 8)) {
+      const mapping = DONKI_TYPE_MAP[n.messageType] || { type: 'solar' as const, label: n.messageType };
+      const time = new Date(n.messageIssueTime);
+      const summary = n.messageBody?.substring(0, 80).replace(/\n/g, ' ').trim() || '';
+
       events.push({
-        id: 'evt-approach',
-        type: 'approach',
-        title: 'Close approach detected',
-        meta: `${leos[0].name} / ${leos[1].name} · 2.4 km · ${tStr(ago(6))}`,
-        time: ago(6),
+        id: `donki-${n.messageType}-${time.getTime()}`,
+        type: mapping.type,
+        title: mapping.label,
+        meta: `${summary}…`,
+        time,
+        url: n.messageURL,
       });
     }
+  } catch (err) {
+    console.warn('DONKI fetch failed:', err);
   }
 
-  events.push({
-    id: 'evt-tle',
-    type: 'tle',
-    title: 'TLE catalog updated',
-    meta: `CelesTrak · ${satellites.length} objects · ${tStr(ago(12))}`,
-    time: ago(12),
-  });
+  // ─── EONET (natural events observed by satellites) ──────────────────────
+  try {
+    const eonetUrl = `https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=6`;
+    const eonetRes = await axios.get<{
+      events: Array<{
+        id: string;
+        title: string;
+        categories: Array<{ title: string }>;
+        sources: Array<{ url: string }>;
+        geometry: Array<{ date: string }>;
+      }>;
+    }>(eonetUrl, { timeout: 10000 });
 
-  const signalSat = satellites.find(s => s.name.includes('NOAA') || s.name.includes('SENTINEL'));
-  if (signalSat) {
-    events.push({
-      id: 'evt-signal',
-      type: 'signal',
-      title: 'Signal acquired',
-      meta: `${signalSat.name} · ${signalSat.alt.toFixed(0)} km · ${tStr(ago(18))}`,
-      time: ago(18),
-    });
+    for (const e of eonetRes.data.events) {
+      const catTitle = e.categories[0]?.title || '';
+      const mapping = EONET_TYPE_MAP[catTitle] || { type: 'eonet' as const, label: catTitle };
+      const lastGeom = e.geometry[e.geometry.length - 1];
+      const time = lastGeom ? new Date(lastGeom.date) : now;
+      const sourceUrl = e.sources[0]?.url || '';
+
+      events.push({
+        id: `eonet-${e.id}`,
+        type: mapping.type,
+        title: `${mapping.label}`,
+        meta: e.title,
+        time,
+        url: sourceUrl,
+      });
+    }
+  } catch (err) {
+    console.warn('EONET fetch failed:', err);
   }
 
-  const debrSat = satellites.find(s => s.orbitType === 'LEO' && s.alt < 450);
-  if (debrSat) {
-    events.push({
-      id: 'evt-debris',
-      type: 'debris',
-      title: 'Decay alert',
-      meta: `${debrSat.name} · alt ${debrSat.alt.toFixed(0)} km · ${tStr(ago(27))}`,
-      time: ago(27),
-    });
-  }
-
-  const passSat = satellites.find(s => s.orbitType === 'LEO' && s.inclination > 80);
-  if (passSat) {
-    events.push({
-      id: 'evt-pass',
-      type: 'pass',
-      title: 'Overhead pass predicted',
-      meta: `${passSat.name} · elevation 72° · ${tStr(ago(33))}`,
-      time: ago(33),
-    });
-  }
-
-  events.push({
-    id: 'evt-tle2',
-    type: 'tle',
-    title: 'Space-Track.org sync',
-    meta: `Differential corrections applied · ${tStr(ago(45))}`,
-    time: ago(45),
-  });
+  // Sort by most recent first
+  events.sort((a, b) => b.time.getTime() - a.time.getTime());
 
   return events;
 };

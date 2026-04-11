@@ -19,10 +19,11 @@ export interface Satellite3D {
 
 export interface SatelliteEvent {
   id: string;
-  type: 'approach' | 'tle' | 'signal' | 'debris' | 'pass';
+  type: 'solar' | 'storm' | 'fire' | 'radiation' | 'eonet' | 'approach' | 'tle' | 'signal' | 'debris' | 'pass';
   title: string;
   meta: string;
   time: Date;
+  url?: string;
 }
 
 export interface SatelliteStats {

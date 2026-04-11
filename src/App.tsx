@@ -9,7 +9,7 @@ import { HudOverlay } from './components/UI/HudOverlay';
 import { Timeline } from './components/UI/Timeline';
 import { SatelliteModal } from './components/UI/SatelliteModal';
 import {
-  fetchSatellites, generateEvents, calcStats,
+  fetchSatellites, fetchNasaEvents, calcStats,
   fetchStarlinkTLE, filterByRegion, STARLINK_REGIONS,
 } from './services/satelliteApi';
 import type { Satellite3D, SatelliteEvent, SatelliteStats } from './types/satellite';
@@ -74,8 +74,10 @@ function App() {
           setSelectedSatellite(sats[0]);
         }
 
-        setEvents(generateEvents(sats));
         setStats(calcStats(sats));
+
+        // Fetch real NASA events (non-blocking)
+        fetchNasaEvents().then(setEvents).catch(() => {});
       } catch (err) {
         console.error('Failed to load satellites:', err);
       } finally {
