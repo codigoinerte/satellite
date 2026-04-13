@@ -31,8 +31,8 @@ export interface SatelliteStats {
   leo: number;
   meo: number;
   geo: number;
-  debris: number;
   heo?: number;
+  agencies: number;
 }
 
 // CelesTrak GP OMM JSON record

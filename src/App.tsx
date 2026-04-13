@@ -45,7 +45,7 @@ function App() {
   const [selectedSatellite, setSelectedSatellite] = useState<Satellite3D | null>(null);
   const [events, setEvents] = useState<SatelliteEvent[]>([]);
   const [stats, setStats] = useState<SatelliteStats>({
-    total: 0, leo: 0, meo: 0, geo: 0, debris: 0,
+    total: 0, leo: 0, meo: 0, geo: 0, agencies: 0,
   });
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);

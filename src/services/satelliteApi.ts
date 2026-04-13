@@ -380,7 +380,7 @@ export const calcStats = (satellites: Satellite3D[]) => ({
   meo:     satellites.filter(s => s.orbitType === 'MEO').length,
   geo:     satellites.filter(s => s.orbitType === 'GEO').length,
   heo:     satellites.filter(s => s.orbitType === 'HEO').length,
-  debris:  0,
+  agencies: new Set(satellites.map(s => s.country)).size,
 });
 
 // ─── Starlink ─────────────────────────────────────────────────────────────────

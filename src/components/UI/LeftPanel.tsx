@@ -139,8 +139,8 @@ export function LeftPanel({
             <div className="stat-value">{(stats.leo + stats.meo + stats.geo).toLocaleString()}</div>
           </div>
           <div className="stat-item">
-            <div className="stat-label">Debris</div>
-            <div className="stat-value red">{stats.debris.toLocaleString()}</div>
+            <div className="stat-label">Agencies</div>
+            <div className="stat-value">{stats.agencies}</div>
           </div>
         </div>
       </div>
