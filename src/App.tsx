@@ -8,6 +8,7 @@ import EarthScene from './components/Earth/EarthScene';
 import { HudOverlay } from './components/UI/HudOverlay';
 import { Timeline } from './components/UI/Timeline';
 import { SatelliteModal } from './components/UI/SatelliteModal';
+import { InformationPanel } from './components/UI/InformationPanel';
 import {
   fetchSatellites, fetchNasaEvents, calcStats,
   fetchStarlinkTLE, filterByRegion, STARLINK_REGIONS,
@@ -48,6 +49,7 @@ function App() {
   });
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeNav, setActiveNav] = useState('globe');
 
   // ─── Starlink state ──────────────────────────────────────────────────────
   const [starlinkAll, setStarlinkAll] = useState<Satellite3D[]>([]);
@@ -204,50 +206,54 @@ function App() {
   return (
     <div className="shell">
       <DotCanvas />
-      <Topbar activeNav="globe" />
+      <Topbar activeNav={activeNav} onNavChange={setActiveNav} />
 
-      <div className="body-grid">
-        <LeftPanel selected={selectedSatellite} stats={stats} events={events} />
+      {activeNav === 'globe' ? (
+        <div className="body-grid">
+          <LeftPanel selected={selectedSatellite} stats={stats} events={events} />
 
-        <div style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
-          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-            {loading ? (
-              <div
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  height: '100%', color: 'var(--text-md)', fontSize: '12px',
-                }}
-              >
-                Loading satellites...
-              </div>
-            ) : (
-              <>
-                <EarthScene
-                  satellites={satellites}
-                  selectedSatellite={selectedSatellite}
-                  starlinkSatellites={starlinkActive ? starlinkFiltered : []}
-                />
-                <HudOverlay selected={selectedSatellite} />
-              </>
-            )}
+          <div style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
+            <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+              {loading ? (
+                <div
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    height: '100%', color: 'var(--text-md)', fontSize: '12px',
+                  }}
+                >
+                  Loading satellites...
+                </div>
+              ) : (
+                <>
+                  <EarthScene
+                    satellites={satellites}
+                    selectedSatellite={selectedSatellite}
+                    starlinkSatellites={starlinkActive ? starlinkFiltered : []}
+                  />
+                  <HudOverlay selected={selectedSatellite} />
+                </>
+              )}
+            </div>
+            <Timeline />
           </div>
-          <Timeline />
-        </div>
 
-        <RightPanel
-          satellites={satellites}
-          selected={selectedSatellite}
-          onSelect={handleSatelliteSelect}
-          starlinkSatellites={starlinkFiltered}
-          starlinkLoading={starlinkLoading}
-          starlinkLoaded={starlinkLoaded}
-          starlinkTotal={starlinkTotal}
-          starlinkRegion={starlinkRegion}
-          onStarlinkRegionChange={setStarlinkRegion}
-          onLoadStarlink={handleLoadStarlink}
-          onStarlinkActiveChange={setStarlinkActive}
-        />
-      </div>
+          <RightPanel
+            satellites={satellites}
+            selected={selectedSatellite}
+            onSelect={handleSatelliteSelect}
+            starlinkSatellites={starlinkFiltered}
+            starlinkLoading={starlinkLoading}
+            starlinkLoaded={starlinkLoaded}
+            starlinkTotal={starlinkTotal}
+            starlinkRegion={starlinkRegion}
+            onStarlinkRegionChange={setStarlinkRegion}
+            onLoadStarlink={handleLoadStarlink}
+            onStarlinkActiveChange={setStarlinkActive}
+          />
+        </div>
+      ) : (
+        <InformationPanel />
+      )}
 
       <StatusBar totalObjects={satellites.length} />
 

@@ -6,7 +6,7 @@ import type { Satellite3D } from '../../types/satellite';
 // ─── Texture URLs (same as three.js TSL earth example) ──────────────────────
 const TEXTURE_URLS = {
   day: 'https://threejs.org/examples/textures/planets/earth_day_4096.jpg',
-  night: 'https://threejs.org/examples/textures/planets/earth_night_4096.jpg',
+  night: '/images/8081_earthlights10k.jpg',
   // R = bump height, G = roughness, B = clouds
   bumpRoughnessClouds: 'https://threejs.org/examples/textures/planets/earth_bump_roughness_clouds_4096.jpg',
 };
@@ -305,21 +305,67 @@ function SatelliteOrbit({ satellite }: { satellite: Satellite3D }) {
     }
   });
 
+  const isStation = STATION_IDS.has(satellite.id);
+
   return (
     <group>
       {/* Orbit trajectory line */}
       <primitive object={orbitLineObj} />
 
-      {/* Satellite position marker — red diamond */}
-      <mesh ref={markerRef} position={currentPos}>
-        <octahedronGeometry args={[0.12, 0]} />
-        <meshBasicMaterial color={0xff2233} />
-      </mesh>
+      {/* Generic marker — hidden for stations (they have their own 3D model) */}
+      {!isStation && (
+        <>
+          <mesh ref={markerRef} position={currentPos}>
+            <octahedronGeometry args={[0.12, 0]} />
+            <meshBasicMaterial color={0xff2233} />
+          </mesh>
+          <mesh position={currentPos} rotation={[Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.18, 0.25, 32]} />
+            <meshBasicMaterial color={0xff2233} transparent opacity={0.4} side={THREE.DoubleSide} />
+          </mesh>
+        </>
+      )}
+    </group>
+  );
+}
 
-      {/* Glow ring around marker */}
-      <mesh position={currentPos} rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.18, 0.25, 32]} />
-        <meshBasicMaterial color={0xff2233} transparent opacity={0.4} side={THREE.DoubleSide} />
+// ─── Space Station 3D marker (ISS, CSS/TIANHE) ──────────────────────────────
+const STATION_IDS = new Set([25544, 48274]); // ISS (ZARYA), CSS (TIANHE)
+
+function StationMarker({ satellite }: { satellite: Satellite3D }) {
+  const groupRef = useRef<THREE.Group>(null);
+
+  useFrame(({ clock }) => {
+    if (groupRef.current) {
+      groupRef.current.rotation.y = clock.elapsedTime * 0.5;
+    }
+  });
+
+  const pos = useMemo(() => latLngAltToVec3(satellite.lat, satellite.lng, satellite.alt), [satellite]);
+
+  const color = satellite.id === 25544 ? '#ffffff' : '#ffcc00'; // ISS = white, CSS = gold
+
+  return (
+    <group ref={groupRef} position={pos}>
+      {/* Body */}
+      <mesh>
+        <boxGeometry args={[0.12, 0.08, 0.15]} />
+        <meshBasicMaterial color={color} />
+      </mesh>
+      {/* Solar panel left */}
+      <mesh position={[-0.18, 0, 0]}>
+        <boxGeometry args={[0.2, 0.1, 0.015]} />
+        <meshBasicMaterial color="#1a3a6a" />
+      </mesh>
+      {/* Solar panel right */}
+      <mesh position={[0.18, 0, 0]}>
+        <boxGeometry args={[0.2, 0.1, 0.015]} />
+        <meshBasicMaterial color="#1a3a6a" />
+      </mesh>
+      {/* Antenna */}
+      <mesh position={[0, 0.08, 0]}>
+        <cylinderGeometry args={[0.005, 0.005, 0.1]} />
+        <meshBasicMaterial color={color} />
       </mesh>
     </group>
   );
@@ -421,6 +467,9 @@ export default function Earth({
       >
         {selectedSatellite && <SatelliteOrbit satellite={selectedSatellite} />}
         {starlinkSatellites.length > 0 && <StarlinkPoints satellites={starlinkSatellites} />}
+        {selectedSatellite && STATION_IDS.has(selectedSatellite.id) && (
+          <StationMarker satellite={selectedSatellite} />
+        )}
       </EarthWithTextures>
     </group>
   );

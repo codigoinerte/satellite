@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 
 interface TopbarProps {
   activeNav?: string;
+  onNavChange?: (nav: string) => void;
 }
 
-export function Topbar({ activeNav = 'globe' }: TopbarProps) {
+export function Topbar({ activeNav = 'globe', onNavChange }: TopbarProps) {
   const [clock, setClock] = useState('00:00:00 UTC');
 
   useEffect(() => {
@@ -103,7 +104,7 @@ export function Topbar({ activeNav = 'globe' }: TopbarProps) {
             marginLeft: '20px',
           }}
         >
-          {['Globe', 'Analytics', 'Coverage', 'Alerts', 'API'].map((item) => (
+          {['Globe', 'Information'].map((item) => (
             <button
               key={item}
               style={{
@@ -115,17 +116,16 @@ export function Topbar({ activeNav = 'globe' }: TopbarProps) {
                 fontWeight: 400,
                 cursor: 'pointer',
                 padding: '4px 8px',
-                borderBottom: activeNav === item.toLowerCase() ? '1px solid var(--text-hi)' : 'transparent',
+                borderBottom: activeNav === item.toLowerCase() ? '1px solid var(--text-hi)' : '1px solid transparent',
                 transition: 'color 0.15s, border-color 0.15s',
               }}
+              onClick={() => onNavChange?.(item.toLowerCase())}
               onMouseEnter={(e) => {
-                const target = e.currentTarget as HTMLButtonElement;
-                target.style.color = 'var(--text-hi)';
+                (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-hi)';
               }}
               onMouseLeave={(e) => {
-                const target = e.currentTarget as HTMLButtonElement;
                 if (activeNav !== item.toLowerCase()) {
-                  target.style.color = 'var(--text-md)';
+                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-md)';
                 }
               }}
             >

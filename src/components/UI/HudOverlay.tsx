@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { Satellite3D } from '../../types/satellite';
 
 interface HudOverlayProps {
@@ -6,13 +5,8 @@ interface HudOverlayProps {
 }
 
 export function HudOverlay({ selected }: HudOverlayProps) {
-  const [showOrbits, setShowOrbits] = useState(true);
-  const [showTargets, setShowTargets] = useState(true);
-  const [showLabels, setShowLabels] = useState(true);
-
   return (
     <>
-      {/* Top-left: Coordinate card */}
       {selected && (
         <div
           className="hud-overlay"
@@ -43,28 +37,6 @@ export function HudOverlay({ selected }: HudOverlayProps) {
           </div>
         </div>
       )}
-
-      {/* Top-right: Toggle buttons */}
-      <div className="hud-buttons">
-        <button
-          className={`hud-button ${showOrbits ? 'on' : ''}`}
-          onClick={() => setShowOrbits(!showOrbits)}
-        >
-          Orbits
-        </button>
-        <button
-          className={`hud-button ${showTargets ? 'on' : ''}`}
-          onClick={() => setShowTargets(!showTargets)}
-        >
-          Targets
-        </button>
-        <button
-          className={`hud-button ${showLabels ? 'on' : ''}`}
-          onClick={() => setShowLabels(!showLabels)}
-        >
-          Labels
-        </button>
-      </div>
     </>
   );
 }

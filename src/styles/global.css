@@ -868,9 +868,9 @@ canvas[id="dot-canvas"] {
 .earth-camera-controls {
   position: absolute;
   right: 10px;
-  top: 124px;
+  top: 10px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 6px;
   z-index: 12;
   pointer-events: auto;
