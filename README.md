@@ -1,200 +1,176 @@
-# 🛰️ SATTRACK - Global Satellite Monitoring System
+# SATTRACK — Global Satellite Monitoring System
 
-Un sistema de monitoreo de satélites en tiempo real con diseño cyberpunk/futurista, construido con React, Three.js y la API de N2YO.com.
+Dashboard 3D interactivo para monitoreo global de satélites en tiempo real. Diseño cyberpunk/futurista con globo terrestre renderizado con shaders GLSL, cálculo orbital TLE en cliente y visualización de constelaciones completas como Starlink.
 
-![SATTRACK Preview](https://via.placeholder.com/1200x600/0a0e27/00fff9?text=SATTRACK+Global+Satellite+Monitoring)
+![SATTRACK Preview](https://via.placeholder.com/1200x600/202124/a62c2e?text=SATTRACK+%E2%80%94+Global+Satellite+Monitoring)
 
-## ✨ Características
+---
 
-- 🌍 **Visualización 3D**: Globo terráqueo interactivo con órbitas de satélites en tiempo real
-- 🛰️ **Modelos 3D**: Representación 3D de satélites con paneles solares y antenas
-- 📊 **Vista de Tabla**: Lista completa de satélites con búsqueda y paginación
-- 💾 **Exportación CSV**: Descarga datos de satélites en formato CSV
-- 🎨 **Diseño Cyberpunk**: Interfaz futurista con efectos neón y animaciones suaves
-- 🌐 **Datos en Tiempo Real**: Integración con N2YO.com API para tracking satelital
-- 🖱️ **Interactividad**: Click en satélites para ver información detallada
-- 🏳️ **Banderas de Países**: Visualización del país de origen de cada satélite
+## Características
 
-## 🚀 Inicio Rápido
+**Visualización 3D**
+- Globo terrestre con shaders GLSL custom: blending día/noche, textura de luces de ciudades NASA, nubes y bump mapping
+- Satélites renderizados como modelos 3D individuales (cuerpo, antena, paneles solares, glow pulsante, labels billboard)
+- Anillos orbitales visuales: LEO sólido, MEO dashed, exterior dotted
+- OrbitControls con autoRotate, damping y límites de zoom
 
-### Prerrequisitos
+**Tracking en Tiempo Real**
+- Datos TLE consumidos desde CelesTrak (formato estándar)
+- Propagación orbital con `satellite.js` — todo en cliente, sin latencia de red
+- Posiciones actualizadas cada frame con conversión ECI → geodésico → coords 3D (Three.js)
+- Clasificación automática: LEO / MEO / GEO / HEO / DEBRIS
 
-- Node.js 18+
-- npm o yarn
+**UI & Layout**
+- Shell CSS Grid: `Topbar (44px) | Body | StatusBar (34px)`
+- Body en 3 columnas: `272px (Left Panel) | 1fr (Centro 3D) | 292px (Right Panel)`
+- Reloj UTC en vivo en Topbar
+- HUD overlay con coordenadas flotantes
+- Tabs: Globe 3D · Data Table · Starlink
 
-### Instalación
+**Vista Table**
+- Lista completa con búsqueda por nombre/país, paginación y exportación CSV
 
-1. Las dependencias ya están instaladas. Si necesitas reinstalar:
+**Starlink (en desarrollo — rama `starlink`)**
+- Visualización de ~7,000+ satélites Starlink filtrados por región geográfica
+- Web Worker para propagación masiva sin bloquear el hilo principal
+- Renderizado vía `PointsMaterial` (1 draw call para miles de objetos)
+- Filtros por región: Global, Sudamérica, Centroamérica, Norteamérica, Europa, Asia, Africa, Oceania
+- Re-propagación automática cada 30s (solo cuando el tab Starlink está activo)
+
+---
+
+## Tech Stack
+
+| Categoría | Tecnología | Versión |
+|-----------|-----------|---------|
+| Framework | React + TypeScript | 19.x / 5.9.x |
+| Build | Vite | 8.x |
+| 3D Engine | Three.js + React Three Fiber + Drei | 0.183.x |
+| Mecánica Orbital | satellite.js | 7.0.x |
+| Animaciones | Framer Motion | 12.x |
+| HTTP | Axios | 1.13.x |
+| Iconos | Lucide React | 1.7.x |
+
+---
+
+## Inicio Rápido
+
+**Prerrequisitos:** Node.js 18+
+
 ```bash
 npm install
-```
-
-2. Inicia el servidor de desarrollo:
-```bash
 npm run dev
 ```
 
-3. Abre tu navegador en `http://localhost:5173`
+Abre `http://localhost:5173`
 
-## 🔑 Configuración de la API (Opcional)
+---
 
-Por defecto, la aplicación usa datos mock para demostración. Para usar datos en tiempo real:
-
-1. Obtén una API key gratuita de [N2YO.com](https://www.n2yo.com/api/)
-
-2. Abre `src/services/satelliteApi.ts`
-
-3. Reemplaza `'YOUR_N2YO_API_KEY'` con tu API key:
-```typescript
-const API_KEY = 'TU-API-KEY-AQUI';
-```
-
-4. En `src/App.tsx`, cambia la línea 27:
-```typescript
-// De:
-const data = getMockSatellites();
-
-// A:
-const data = await getAllSatellites();
-```
-
-## 🎮 Uso
-
-### Vista 3D Globe
-
-- **Rotar**: Click izquierdo + arrastrar
-- **Zoom**: Scroll del mouse
-- **Pan**: Click derecho + arrastrar
-- **Seleccionar satélite**: Click en cualquier satélite
-- **Hover**: Pasa el mouse sobre un satélite para ver su nombre y órbita
-
-### Vista Data Table
-
-- **Buscar**: Usa el campo de búsqueda para filtrar por nombre o país
-- **Ver detalles**: Click en el botón "View" de cualquier satélite
-- **Exportar**: Click en "Export CSV" para descargar la lista completa
-- **Navegar**: Usa los botones de paginación para ver más satélites
-
-## 🏗️ Estructura del Proyecto
+## Arquitectura
 
 ```
-satellite/
-├── src/
-│   ├── components/
-│   │   ├── Earth/
-│   │   │   ├── Earth.tsx          # Componente del globo terráqueo
-│   │   │   └── EarthScene.tsx     # Escena 3D principal
-│   │   ├── Satellite/
-│   │   │   └── Satellite3D.tsx    # Modelo 3D del satélite
-│   │   ├── Table/
-│   │   │   └── SatelliteTable.tsx # Tabla de datos
-│   │   ├── UI/
-│   │   │   ├── SatelliteInfo.tsx  # Modal de información
-│   │   │   ├── StatsPanel.tsx     # Panel de estadísticas
-│   │   │   └── Tabs.tsx           # Navegación por tabs
-│   │   └── Layout/
-│   │       ├── Header.tsx         # Encabezado
-│   │       └── Footer.tsx         # Pie de página
-│   ├── services/
-│   │   └── satelliteApi.ts        # Integración con API
-│   ├── types/
-│   │   └── satellite.ts           # Tipos TypeScript
-│   ├── styles/
-│   │   └── global.css             # Estilos globales
-│   ├── App.tsx                    # Componente principal
-│   └── main.tsx                   # Punto de entrada
-├── package.json
-└── README.md
+App.tsx (estado central)
+├── Topbar.tsx              — Header, reloj UTC, nav
+├── LeftPanel.tsx
+│   ├── SatelliteInfo       — Modal animado del satélite seleccionado
+│   └── StatsPanel          — Tarjetas de estadísticas globales
+├── EarthScene.tsx          — Canvas 3D principal (React Three Fiber)
+│   ├── Earth.tsx           — Globo con ShaderMaterial GLSL
+│   ├── Satellite3D.tsx[]   — Modelos 3D de satélites
+│   └── OrbitRings          — Anillos orbitales visuales
+├── SatelliteTable.tsx      — Vista alternativa en tabla
+├── RightPanel.tsx          — Buscador, filtros, lista, control Starlink
+│   └── Tabs.tsx            — Globe | Table | Starlink
+├── Timeline.tsx            — Barra de progreso diario
+├── StatusBar.tsx           — Footer: fuente, estado conexión, versión
+├── HudOverlay.tsx          — Coordenadas flotantes en pantalla
+└── DotCanvas.tsx           — Fondo decorativo de puntos
 ```
 
-## 🎨 Personalización del Diseño
+**Capa de servicios:**
+- `src/services/satelliteApi.ts` — fetch TLE, parse, cálculos orbitales, conversión de coordenadas
+- `src/services/starlink.worker.ts` — Web Worker para propagación masiva Starlink
 
-Los colores del tema cyberpunk se pueden personalizar en `src/styles/global.css`:
+---
+
+## Design System (Cyberpunk)
 
 ```css
 :root {
-  --cyber-primary: #00fff9;      /* Cyan neón */
-  --cyber-secondary: #ff00ff;    /* Magenta */
-  --cyber-accent: #7928ca;       /* Púrpura */
-  --cyber-warning: #ff0080;      /* Rosa */
-  --cyber-success: #00ff41;      /* Verde */
-  --cyber-bg-dark: #0a0e27;      /* Fondo oscuro */
-  --cyber-bg-darker: #050816;    /* Fondo más oscuro */
+  --bg: rgb(32, 33, 36);      /* Fondo principal */
+  --bg-panel: #1c1d20;        /* Paneles */
+  --text-hi: #e8e8ea;         /* Texto principal */
+  --text-md: #8c8d92;         /* Texto secundario */
+  --red: #a62c2e;             /* Acento principal */
+
+  /* Tipos de órbita */
+  --leo: #7a9e7a;             /* LEO — verde */
+  --meo: #9e8f6a;             /* MEO — dorado */
+  --geo: #7a80a8;             /* GEO — azul */
+  --deb: #8a4a4a;             /* DEBRIS — rojo oscuro */
 }
 ```
 
-## 📦 Tecnologías Utilizadas
+**Tipografía:**
+- Brand SATTRACK: `Space Mono 700`, 12px, letter-spacing 3px, uppercase
+- Datos numéricos: `Space Mono 700`, 14–18px (monospace)
+- UI general: `Inter 400–600`, 11–13px
 
-- **React 18** - Framework UI
-- **TypeScript** - Tipado estático
-- **Vite** - Build tool y dev server
-- **Three.js** - Motor de gráficos 3D
-- **React Three Fiber** - React renderer para Three.js
-- **React Three Drei** - Helpers para React Three Fiber
-- **Framer Motion** - Animaciones
-- **Axios** - Cliente HTTP
-- **Lucide React** - Iconos
-- **Satellite.js** - Cálculos orbitales
+---
 
-## 🌟 Características Destacadas
+## Controles 3D
 
-### Sistema de Órbitas Realista
-Los satélites siguen órbitas calculadas basadas en datos reales de TLE (Two-Line Elements) cuando se usa la API de N2YO.
+| Acción | Control |
+|--------|---------|
+| Rotar globo | Click izquierdo + arrastrar |
+| Zoom | Scroll del mouse |
+| Pan | Click derecho + arrastrar |
+| Seleccionar satélite | Click sobre el modelo 3D |
+| Ver nombre/órbita | Hover sobre el satélite |
 
-### Diseño Responsive
-La interfaz se adapta a diferentes tamaños de pantalla, desde móviles hasta pantallas grandes.
+---
 
-### Optimización de Rendimiento
-- Renderizado eficiente con React Three Fiber
-- Memoización de componentes
-- Lazy loading de datos
+## Scripts
 
-### Accesibilidad
-- Navegación por teclado
-- Labels semánticos
-- Contraste de colores optimizado
-
-## 🐛 Solución de Problemas
-
-### El servidor no inicia
 ```bash
-# Limpia node_modules y reinstala
-rm -rf node_modules package-lock.json
-npm install
+npm run dev      # Servidor de desarrollo
+npm run build    # Build de producción
+npm run preview  # Preview del build
+npm run lint     # Linter
 ```
 
-### Error de tipos TypeScript
+---
+
+## Solución de Problemas
+
+**El servidor no inicia**
 ```bash
-# Reinstala tipos
+rm -rf node_modules package-lock.json && npm install
+```
+
+**Error de tipos Three.js**
+```bash
 npm install -D @types/three
 ```
 
-### La API no responde
-- Verifica que tu API key sea válida
-- Revisa los límites de tasa de la API (300 transacciones/hora en plan gratuito)
-- Comprueba tu conexión a internet
+---
 
-## 📝 Scripts Disponibles
+## Agradecimientos
 
-```bash
-npm run dev      # Inicia el servidor de desarrollo
-npm run build    # Construye la aplicación para producción
-npm run preview  # Previsualiza el build de producción
-npm run lint     # Ejecuta el linter
-```
-
-## 📧 Contacto
-
-Para preguntas o soporte, abre un issue en el repositorio.
-
-## 🙏 Agradecimientos
-
-- [N2YO.com](https://www.n2yo.com/) por proporcionar la API de tracking satelital
-- [Three.js](https://threejs.org/) por el motor de gráficos 3D
-- [Flag CDN](https://flagcdn.com/) por las banderas de países
+- [CelesTrak](https://celestrak.org/) — fuente principal de datos TLE
+- [Three.js](https://threejs.org/) — motor de gráficos 3D
+- [satellite.js](https://github.com/shashwatak/satellite-js) — cálculos orbitales SGP4/SDP4
+- [Flag CDN](https://flagcdn.com/) — banderas de países
+- [NASA Visible Earth](https://visibleearth.nasa.gov/) — texturas terrestres
 
 ---
 
 <div align="center">
-  Made with 💜 by SATTRACK Team
+
+Built with dedication by the SATTRACK team
+
+**Este proyecto fue posible gracias a la colaboración con [Claude](https://claude.ai) (Anthropic)**,
+que participó activamente en el diseño de la arquitectura, implementación de componentes,
+shaders GLSL, mecánica orbital y el sistema de diseño cyberpunk.
+
 </div>
