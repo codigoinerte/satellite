@@ -275,7 +275,7 @@ export const getMockSatellites = (): Satellite3D[] => {
 
 // ─── NASA event types ─────────────────────────────────────────────────────────
 
-const NASA_API_KEY = 'DEMO_KEY';
+const NASA_API_KEY = import.meta.env.VITE_NASA_API_KEY ?? 'DEMO_KEY';
 
 const DONKI_TYPE_MAP: Record<string, { type: SatelliteEvent['type']; label: string }> = {
   CME:  { type: 'solar',     label: 'Eyección solar (CME)' },
