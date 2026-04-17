@@ -895,3 +895,77 @@ canvas[id="dot-canvas"] {
   flex-direction: column;
   gap: 8px;
 }
+
+/* ─── Responsive ──────────────────────────────────────────────────────────── */
+
+/* Tablet: hide left panel, shrink right panel */
+@media (max-width: 1024px) {
+  .body-grid {
+    grid-template-columns: 1fr 240px;
+  }
+  .left-panel {
+    display: none;
+  }
+}
+
+/* Mobile landscape / small tablet: single column, right panel below */
+@media (max-width: 768px) {
+  .body-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+  .right-panel {
+    max-height: 35vh;
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+  .left-panel {
+    display: none;
+  }
+  .hud-overlay {
+    font-size: 8px;
+    padding: 6px 8px;
+  }
+  .earth-camera-controls {
+    top: 6px;
+    right: 6px;
+  }
+  .earth-camera-controls .hud-button {
+    min-width: 56px;
+    font-size: 9px;
+    padding: 3px 6px;
+  }
+  .timeline {
+    padding: 6px 10px;
+  }
+}
+
+/* Mobile portrait + topbar cleanup */
+@media (max-width: 480px) {
+  .topbar-subtitle,
+  .topbar-divider {
+    display: none;
+  }
+  .shell {
+    grid-template-rows: 38px 1fr 28px;
+  }
+  .right-panel {
+    max-height: 40vh;
+  }
+  .sec-head-title {
+    font-size: 8px;
+  }
+  .sat-row-name {
+    font-size: 10px;
+  }
+  .sat-row-meta {
+    font-size: 7px;
+  }
+  .hud-overlay {
+    font-size: 7px;
+    padding: 5px 6px;
+  }
+  .hud-label {
+    min-width: 40px;
+  }
+}

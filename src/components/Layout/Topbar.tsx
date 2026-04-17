@@ -74,6 +74,7 @@ export function Topbar({ activeNav = 'globe', onNavChange }: TopbarProps) {
 
         {/* Divider */}
         <div
+          className="topbar-divider"
           style={{
             width: '1px',
             height: '18px',
@@ -83,6 +84,7 @@ export function Topbar({ activeNav = 'globe', onNavChange }: TopbarProps) {
 
         {/* Subtitle: Orbital Intelligence */}
         <span
+          className="topbar-subtitle"
           style={{
             fontFamily: "'Inter', sans-serif",
             fontSize: '10px',
