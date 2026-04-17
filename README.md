@@ -2,7 +2,7 @@
 
 Dashboard 3D interactivo para monitoreo global de satélites en tiempo real. Diseño cyberpunk/futurista con globo terrestre renderizado con shaders GLSL, cálculo orbital TLE en cliente y visualización de constelaciones completas como Starlink.
 
-![SATTRACK Preview](https://via.placeholder.com/1200x600/202124/a62c2e?text=SATTRACK+%E2%80%94+Global+Satellite+Monitoring)
+![SATTRACK Preview](https://raw.githubusercontent.com/codigoinerte/satellite/refs/heads/main/public/images/github-satellite.png)
 
 ---
 
