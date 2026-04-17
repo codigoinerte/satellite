@@ -184,7 +184,7 @@ function App() {
           type: 'repropagate',
           time: Date.now(),
         });
-      }, 20_000); // 20 seconds
+      }, 90_000); // 1.5 min
     }
     return () => {
       if (repropagateRef.current) {
@@ -201,6 +201,7 @@ function App() {
 
   const handleSatelliteSelect = (sat: Satellite3D) => {
     setSelectedSatellite(sat);
+    setShowModal(true);
   };
 
   return (
