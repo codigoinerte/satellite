@@ -17,7 +17,7 @@ interface LeftPanelProps {
 
 export function LeftPanel({
   selected,
-  stats = { total: 8247, leo: 5234, meo: 1203, geo: 456, debris: 312 },
+  stats = { total: 8247, leo: 5234, meo: 1203, geo: 456, agencies: 0 },
   events = [],
 }: LeftPanelProps) {
 
