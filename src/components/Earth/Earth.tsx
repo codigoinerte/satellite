@@ -6,7 +6,7 @@ import type { Satellite3D } from '../../types/satellite';
 // ─── Texture URLs (same as three.js TSL earth example) ──────────────────────
 const TEXTURE_URLS = {
   day: 'https://threejs.org/examples/textures/planets/earth_day_4096.jpg',
-  night: '/images/8081_earthlights10k.jpg',
+  night: `${import.meta.env.BASE_URL}images/8081_earthlights10k.jpg`,
   // R = bump height, G = roughness, B = clouds
   bumpRoughnessClouds: 'https://threejs.org/examples/textures/planets/earth_bump_roughness_clouds_4096.jpg',
 };
