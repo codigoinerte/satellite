@@ -26,4 +26,4 @@ dist-ssr
 *.sln
 *.sw?
 .docs
-.github/agents/
+.github/agents/docs/
