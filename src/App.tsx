@@ -11,7 +11,7 @@ import { SatelliteModal } from './components/UI/SatelliteModal';
 import { InformationPanel } from './components/UI/InformationPanel';
 import {
   fetchSatellites, fetchNasaEvents, calcStats,
-  fetchStarlinkTLE, filterByRegion, STARLINK_REGIONS,
+  fetchStarlinkGP, filterByRegion, STARLINK_REGIONS,
 } from './services/satelliteApi';
 import type { Satellite3D, SatelliteEvent, SatelliteStats } from './types/satellite';
 import type { StarlinkRegion } from './services/satelliteApi';
@@ -89,35 +89,6 @@ function App() {
     loadData();
   }, []);
 
-  // ─── Starlink localStorage cache ──────────────────────────────────────────
-  const STARLINK_CACHE_KEY = 'starlink_tle_cache';
-  const STARLINK_CACHE_MAX_AGE = 15 * 60 * 1000; // 15 minutes
-
-  const getCachedTLE = (): string | null => {
-    try {
-      const raw = localStorage.getItem(STARLINK_CACHE_KEY);
-      if (!raw) return null;
-      const { tleText, timestamp } = JSON.parse(raw);
-      if (Date.now() - timestamp > STARLINK_CACHE_MAX_AGE) {
-        localStorage.removeItem(STARLINK_CACHE_KEY);
-        return null;
-      }
-      return tleText;
-    } catch {
-      return null;
-    }
-  };
-
-  const setCachedTLE = (tleText: string) => {
-    try {
-      localStorage.setItem(STARLINK_CACHE_KEY, JSON.stringify({
-        tleText,
-        timestamp: Date.now(),
-      }));
-    } catch {
-      // localStorage full or unavailable
-    }
-  };
 
   // ─── Starlink worker setup ───────────────────────────────────────────────
   useEffect(() => {
@@ -144,36 +115,22 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── Load Starlink on demand (cache-first) ──────────────────────────────
+  // ─── Load Starlink on demand (service layer handles cache) ──────────────────
   const handleLoadStarlink = useCallback(async () => {
     if (starlinkLoaded || starlinkLoading) return;
     setStarlinkLoading(true);
 
-    // Try cache first
-    const cached = getCachedTLE();
-    if (cached) {
-      workerRef.current?.postMessage({
-        type: 'parse-and-propagate',
-        tleText: cached,
-        time: Date.now(),
-      });
-      return;
-    }
-
-    // Fetch fresh data
     try {
-      const tleText = await fetchStarlinkTLE();
-      setCachedTLE(tleText);
+      const satellites = await fetchStarlinkGP();
       workerRef.current?.postMessage({
         type: 'parse-and-propagate',
-        tleText,
+        satellites,
         time: Date.now(),
       });
     } catch (err) {
-      console.error('Failed to fetch Starlink TLE:', err);
+      console.error('Failed to fetch Starlink data:', err);
       setStarlinkLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [starlinkLoaded, starlinkLoading]);
 
   // ─── Re-propagate every 1.5 min while Starlink tab is active ─────────────

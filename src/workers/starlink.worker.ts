@@ -1,5 +1,5 @@
 import {
-  twoline2satrec,
+  json2satrec,
   propagate,
   gstime,
   eciToGeodetic,
@@ -21,10 +21,23 @@ interface SatelliteResult {
   eccentricity: number;
 }
 
-interface TLERecord {
-  name: string;
-  tle1: string;
-  tle2: string;
+interface OmmRecord {
+  NORAD_CAT_ID: number;
+  OBJECT_NAME: string;
+  EPOCH: string;
+  MEAN_MOTION: number;
+  ECCENTRICITY: number;
+  INCLINATION: number;
+  RA_OF_ASC_NODE: number;
+  ARG_OF_PERICENTER: number;
+  MEAN_ANOMALY: number;
+  BSTAR: number;
+  MEAN_MOTION_DOT: number;
+  MEAN_MOTION_DDOT: number;
+  CLASSIFICATION_TYPE: 'U' | 'C';
+  ELEMENT_SET_NO: number;
+  REV_AT_EPOCH: number;
+  OBJECT_ID: string;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -33,17 +46,6 @@ const RE = 6371.0;
 const GLOBE_RADIUS = 5;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function parseTLEText(text: string): TLERecord[] {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  const records: TLERecord[] = [];
-  for (let i = 0; i + 2 < lines.length; i += 3) {
-    if (lines[i + 1]?.startsWith('1 ') && lines[i + 2]?.startsWith('2 ')) {
-      records.push({ name: lines[i], tle1: lines[i + 1], tle2: lines[i + 2] });
-    }
-  }
-  return records;
-}
-
 function latLngToVector3(lat: number, lng: number, alt: number): [number, number, number] {
   const phi = (90 - lat) * (Math.PI / 180);
   const theta = (lng + 180) * (Math.PI / 180);
@@ -55,13 +57,13 @@ function latLngToVector3(lat: number, lng: number, alt: number): [number, number
   ];
 }
 
-function propagateRecords(records: TLERecord[], time: Date): SatelliteResult[] {
+function propagateRecords(records: OmmRecord[], time: Date): SatelliteResult[] {
   const gmstVal = gstime(time);
   const results: SatelliteResult[] = [];
 
   for (const rec of records) {
     try {
-      const satrec = twoline2satrec(rec.tle1, rec.tle2);
+      const satrec = json2satrec(rec as Parameters<typeof json2satrec>[0]);
       const result = propagate(satrec, time);
 
       if (!result.position || typeof result.position === 'boolean') continue;
@@ -74,27 +76,23 @@ function propagateRecords(records: TLERecord[], time: Date): SatelliteResult[] {
 
       if (isNaN(lat) || isNaN(lng) || isNaN(alt) || alt < 0) continue;
 
-      const noradId = parseInt(rec.tle1.substring(2, 7).trim(), 10);
-      const inclination = parseFloat(rec.tle2.substring(8, 16).trim());
-      const meanMotion = parseFloat(rec.tle2.substring(52, 63).trim());
-      const eccentricity = parseFloat('0.' + rec.tle2.substring(26, 33).trim());
       const velocity = Math.sqrt(GM / (RE + alt));
-      const period = meanMotion > 0 ? (24 * 60) / meanMotion : 0;
+      const period = rec.MEAN_MOTION > 0 ? (24 * 60) / rec.MEAN_MOTION : 0;
 
       results.push({
-        id: noradId,
-        name: rec.name.trim(),
+        id: rec.NORAD_CAT_ID,
+        name: rec.OBJECT_NAME.trim(),
         lat: parseFloat(lat.toFixed(4)),
         lng: parseFloat(lng.toFixed(4)),
         alt: parseFloat(alt.toFixed(1)),
         position: latLngToVector3(lat, lng, alt),
         velocity: parseFloat(velocity.toFixed(2)),
-        inclination: parseFloat(inclination.toFixed(2)),
+        inclination: parseFloat(rec.INCLINATION.toFixed(2)),
         period: parseFloat(period.toFixed(1)),
-        eccentricity: parseFloat(eccentricity.toFixed(6)),
+        eccentricity: parseFloat(rec.ECCENTRICITY.toFixed(6)),
       });
     } catch {
-      // Skip invalid TLEs
+      // Skip invalid records
     }
   }
 
@@ -102,18 +100,16 @@ function propagateRecords(records: TLERecord[], time: Date): SatelliteResult[] {
 }
 
 // ─── Worker message handler ──────────────────────────────────────────────────
-let cachedRecords: TLERecord[] = [];
+let cachedRecords: OmmRecord[] = [];
 
 self.onmessage = (e: MessageEvent) => {
-  const { type, tleText, time } = e.data;
+  const { type, satellites, time } = e.data;
 
   if (type === 'parse-and-propagate') {
-    // Initial load: parse TLE text + propagate
-    cachedRecords = parseTLEText(tleText);
+    cachedRecords = satellites as OmmRecord[];
     const results = propagateRecords(cachedRecords, new Date(time));
     self.postMessage({ type: 'result', satellites: results, total: cachedRecords.length });
   } else if (type === 'repropagate') {
-    // Re-propagate cached TLEs with new time
     if (cachedRecords.length === 0) return;
     const results = propagateRecords(cachedRecords, new Date(time));
     self.postMessage({ type: 'result', satellites: results, total: cachedRecords.length });
