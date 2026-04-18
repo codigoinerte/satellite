@@ -47,7 +47,7 @@ export interface CelesTrakGP {
   RA_OF_ASC_NODE: number;
   ARG_OF_PERICENTER: number;
   MEAN_ANOMALY: number;
-  CLASSIFICATION_TYPE: string;
+  CLASSIFICATION_TYPE: 'U' | 'C' | 'S';
   ELEMENT_SET_NO: number;
   REV_AT_EPOCH: number;
   BSTAR: number;

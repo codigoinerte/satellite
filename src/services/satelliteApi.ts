@@ -1,13 +1,13 @@
 import axios from 'axios';
 import {
-  twoline2satrec,
+  json2satrec,
   propagate,
   gstime,
   eciToGeodetic,
   degreesLat,
   degreesLong,
 } from 'satellite.js';
-import type { Satellite3D, OrbitType, SatelliteEvent } from '../types/satellite';
+import type { Satellite3D, OrbitType, SatelliteEvent, CelesTrakGP } from '../types/satellite';
 
 
 // ─── Country lookup by NORAD ID ───────────────────────────────────────────────
@@ -84,16 +84,13 @@ export const latLngToVector3 = (
   ];
 };
 
-// ─── TLE record type ─────────────────────────────────────────────────────────
-interface TLERecord { name: string; tle1: string; tle2: string }
-
-// ─── Propagate TLE to current position ───────────────────────────────────────
+// ─── Propagate OMM record to current position ────────────────────────────────
 const propagateNow = (
-  tle1: string,
-  tle2: string
+  gp: CelesTrakGP
 ): { lat: number; lng: number; alt: number } | null => {
   try {
-    const satrec = twoline2satrec(tle1, tle2);
+    const classType = (gp.CLASSIFICATION_TYPE === 'S' ? 'U' : gp.CLASSIFICATION_TYPE) as 'U' | 'C' | undefined;
+    const satrec = json2satrec({ ...gp, CLASSIFICATION_TYPE: classType });
     const now    = new Date();
     const result = propagate(satrec, now);
 
@@ -112,103 +109,131 @@ const propagateNow = (
   }
 };
 
-// ─── Build Satellite3D from TLE record ───────────────────────────────────────
-const buildSatellite = (rec: TLERecord): Satellite3D | null => {
-  const pos = propagateNow(rec.tle1, rec.tle2);
+// ─── Build Satellite3D from CelesTrak GP record ───────────────────────────────
+const buildSatellite = (gp: CelesTrakGP): Satellite3D | null => {
+  const pos = propagateNow(gp);
   if (!pos || isNaN(pos.lat) || isNaN(pos.alt)) return null;
 
-  const noradId = parseInt(rec.tle1.substring(2, 7).trim(), 10);
-  const inclination = parseFloat(rec.tle2.substring(8, 16).trim());
-  const meanMotion  = parseFloat(rec.tle2.substring(52, 63).trim());
-  const eccentricity = parseFloat('0.' + rec.tle2.substring(26, 33).trim());
-
-  const { country, code } = guessCountry(noradId, rec.name);
-  const alt       = Math.max(0, pos.alt);
-  const velocity  = orbitalVelocity(alt);
-  const period    = orbitalPeriod(meanMotion);
-  const orbitType = getOrbitType(alt);
+  const { country, code } = guessCountry(gp.NORAD_CAT_ID, gp.OBJECT_NAME);
+  const alt        = Math.max(0, pos.alt);
+  const velocity   = orbitalVelocity(alt);
+  const period     = orbitalPeriod(gp.MEAN_MOTION);
+  const orbitType  = getOrbitType(alt);
 
   return {
-    id:          noradId,
-    name:        rec.name.trim(),
-    cosparId:    '',
-    position:    latLngToVector3(pos.lat, pos.lng, alt),
-    velocity:    parseFloat(velocity.toFixed(2)),
+    id:           gp.NORAD_CAT_ID,
+    name:         gp.OBJECT_NAME.trim(),
+    cosparId:     gp.OBJECT_ID ?? '',
+    position:     latLngToVector3(pos.lat, pos.lng, alt),
+    velocity:     parseFloat(velocity.toFixed(2)),
     country,
-    countryCode: code,
-    lat:         parseFloat(pos.lat.toFixed(4)),
-    lng:         parseFloat(pos.lng.toFixed(4)),
-    alt:         parseFloat(alt.toFixed(1)),
-    inclination: parseFloat(inclination.toFixed(2)),
-    period:      parseFloat(period.toFixed(1)),
-    eccentricity: parseFloat(eccentricity.toFixed(6)),
+    countryCode:  code,
+    lat:          parseFloat(pos.lat.toFixed(4)),
+    lng:          parseFloat(pos.lng.toFixed(4)),
+    alt:          parseFloat(alt.toFixed(1)),
+    inclination:  parseFloat(gp.INCLINATION.toFixed(2)),
+    period:       parseFloat(period.toFixed(1)),
+    eccentricity: parseFloat(gp.ECCENTRICITY.toFixed(6)),
     orbitType,
   };
 };
 
-// ─── TLE API search helper ───────────────────────────────────────────────────
-const searchTleApi = async (query: string, pageSize = 20): Promise<TLERecord[]> => {
-  const url = `${TLE_API_BASE}/?search=${encodeURIComponent(query)}&page-size=${pageSize}`;
-  const res = await axios.get<TleApiResponse>(url, { timeout: 10000 });
-  const records: TLERecord[] = [];
-  for (const m of res.data.member || []) {
-    if (m.line1 && m.line2) {
-      records.push({ name: m.name, tle1: m.line1, tle2: m.line2 });
-    }
+// ─── CelesTrak GP API via allorigins CORS proxy ───────────────────────────────
+const CELESTRAK_GP = 'https://celestrak.org/NORAD/elements/gp.php';
+const ALLORIGINS = 'https://api.allorigins.win/raw?url=';
+
+// 6 groups that cover the most visually interesting satellite types.
+// Kept intentionally small to avoid rate-limiting on the allorigins proxy.
+const CELESTRAK_GROUPS = [
+  'stations',        // ISS, CSS (Tianhe)
+  'weather',         // NOAA, GOES, MetOp
+  'gps-ops',         // GPS Block III/IIF
+  'science',         // Hubble, TERRA, AQUA, Chandra
+  'earth-resources', // Landsat, Sentinel
+  'glo-ops',         // GLONASS
+];
+
+// ─── localStorage cache (2-hour TTL) ─────────────────────────────────────────
+const CACHE_TTL_MS = 2 * 60 * 60 * 1000;
+const CACHE_PREFIX = 'sattrack:celestrak:';
+
+const readCache = <T>(key: string): T | null => {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + key);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw) as { data: T; ts: number };
+    if (Date.now() - ts > CACHE_TTL_MS) return null;
+    return data;
+  } catch {
+    return null;
   }
+};
+
+const writeCache = <T>(key: string, data: T): void => {
+  try {
+    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ data, ts: Date.now() }));
+  } catch {
+    // Quota exceeded or disabled — silently ignore
+  }
+};
+
+// ─── Sequential fetch with delay — avoids rate-limiting on allorigins ────────
+const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+const runSequential = async <T, R>(
+  items: T[],
+  worker: (item: T) => Promise<R>,
+  pauseMs = 300,
+): Promise<PromiseSettledResult<R>[]> => {
+  const out: PromiseSettledResult<R>[] = [];
+  for (let i = 0; i < items.length; i++) {
+    if (i > 0) await delay(pauseMs);
+    const result = await Promise.allSettled([worker(items[i])]);
+    out.push(result[0]);
+  }
+  return out;
+};
+
+const fetchCelesTrakGroup = async (group: string): Promise<CelesTrakGP[]> => {
+  const cached = readCache<CelesTrakGP[]>(`group:${group}`);
+  if (cached) return cached;
+
+  const innerUrl = `${CELESTRAK_GP}?GROUP=${group}&FORMAT=JSON`;
+  const url = `${ALLORIGINS}${encodeURIComponent(innerUrl)}`;
+  const res = await axios.get<CelesTrakGP[]>(url, { timeout: 20000 });
+  const records = res.data || [];
+
+  writeCache(`group:${group}`, records);
   return records;
 };
 
-// Satellite groups to search — covers stations, navigation, weather, science
-const SEARCH_QUERIES = [
-  'ISS',        // ISS + modules
-  'TIANHE',     // Chinese Space Station
-  'NOAA',       // Weather satellites
-  'GPS',        // US navigation
-  'GALILEO',    // EU navigation
-  'SENTINEL',   // EU Earth observation
-  'GOES',       // US geostationary weather
-  'TERRA',      // NASA Earth science
-  'AQUA',       // NASA Earth science
-  'HUBBLE',     // Space telescope
-  'LANDSAT',    // Earth imaging
-  'COSMOS',     // Russian satellites
-  'GLONASS',    // Russian navigation
-  'BEIDOU',     // Chinese navigation
-  'INTELSAT',   // Communications GEO
-  'IRIDIUM',    // LEO communications
-];
-
-// ─── Main: fetch satellites from TLE API ─────────────────────────────────────
+// ─── Main: fetch satellites from CelesTrak ───────────────────────────────────
 export const fetchSatellites = async (): Promise<Satellite3D[]> => {
   const seen = new Set<number>();
-  const allRecords: TLERecord[] = [];
+  const allGP: CelesTrakGP[] = [];
 
-  // Fetch all groups in parallel
-  const results = await Promise.allSettled(
-    SEARCH_QUERIES.map(q => searchTleApi(q, 15))
-  );
+  // Batch of 3 to avoid rate-limiting on cold cache
+  const results = await runSequential(CELESTRAK_GROUPS, fetchCelesTrakGroup);
 
   for (const result of results) {
     if (result.status === 'fulfilled') {
-      for (const rec of result.value) {
-        const id = parseInt(rec.tle1.substring(2, 7).trim(), 10);
-        if (!seen.has(id)) {
-          seen.add(id);
-          allRecords.push(rec);
+      for (const gp of result.value) {
+        if (!seen.has(gp.NORAD_CAT_ID)) {
+          seen.add(gp.NORAD_CAT_ID);
+          allGP.push(gp);
         }
       }
     }
   }
 
-  if (allRecords.length === 0) {
-    console.warn('TLE API unreachable — using mock data');
+  if (allGP.length === 0) {
+    console.warn('CelesTrak unreachable — using mock data');
     return getMockSatellites();
   }
 
   const satellites: Satellite3D[] = [];
-  for (const rec of allRecords) {
-    const sat = buildSatellite(rec);
+  for (const gp of allGP) {
+    const sat = buildSatellite(gp);
     if (sat) satellites.push(sat);
   }
 
@@ -405,55 +430,61 @@ export const STARLINK_REGIONS: StarlinkRegion[] = [
   { id: 'oceania',    name: 'Oceanía',        latMin: -50,  latMax: 0,    lngMin: 110,  lngMax: 180 },
 ];
 
-// TLE API (free, no auth, works when CelesTrak is down)
-const TLE_API_BASE = 'https://tle.ivanstanojevic.me/api/tle';
-const STARLINK_PAGES_TO_FETCH = 15; // 15 pages × 100 = ~1,500 satellites
-const STARLINK_PAGE_SIZE = 100;
+// ─── Simulated Starlink constellation (fallback when API is unreachable) ──────
+// Shell 1 parameters: 550km, 53° inclination, 72 planes × 22 sats = 1584 sats
+// Positions are evenly distributed, not actual live locations.
+const generateSimulatedStarlink = (): CelesTrakGP[] => {
+  const PLANES = 36;
+  const SATS_PER_PLANE = 22;
+  const epoch = new Date().toISOString().slice(0, 23);
+  const sats: CelesTrakGP[] = [];
+  let noradId = 90000;
 
-interface TleApiMember {
-  satelliteId: number;
-  name: string;
-  line1: string;
-  line2: string;
-  date: string;
-}
-
-interface TleApiResponse {
-  totalItems: number;
-  member: TleApiMember[];
-}
-
-export const fetchStarlinkTLE = async (): Promise<string> => {
-  // Fetch multiple pages in parallel
-  const pageNumbers = Array.from({ length: STARLINK_PAGES_TO_FETCH }, (_, i) => i + 1);
-
-  const results = await Promise.allSettled(
-    pageNumbers.map(page =>
-      axios.get<TleApiResponse>(`${TLE_API_BASE}/?search=starlink&page-size=${STARLINK_PAGE_SIZE}&page=${page}`, {
-        timeout: 15000,
-      })
-    )
-  );
-
-  // Convert JSON responses back to TLE text format (worker expects TLE text)
-  const lines: string[] = [];
-  for (const result of results) {
-    if (result.status === 'fulfilled' && result.value.data.member) {
-      for (const m of result.value.data.member) {
-        if (m.line1 && m.line2) {
-          lines.push(m.name);
-          lines.push(m.line1);
-          lines.push(m.line2);
-        }
-      }
+  for (let p = 0; p < PLANES; p++) {
+    const raan = (p / PLANES) * 360;
+    for (let s = 0; s < SATS_PER_PLANE; s++) {
+      sats.push({
+        OBJECT_NAME:       `STARLINK-S${p}-${s}`,
+        OBJECT_ID:         `2019-074A`,
+        NORAD_CAT_ID:      noradId++,
+        EPOCH:             epoch,
+        MEAN_MOTION:       15.055,     // rev/day → ~550km
+        ECCENTRICITY:      0.0001,
+        INCLINATION:       53.0,
+        RA_OF_ASC_NODE:    raan,
+        ARG_OF_PERICENTER: 0,
+        MEAN_ANOMALY:      (s / SATS_PER_PLANE) * 360,
+        CLASSIFICATION_TYPE: 'U',
+        ELEMENT_SET_NO:    999,
+        REV_AT_EPOCH:      0,
+        BSTAR:             0.0001,
+        MEAN_MOTION_DOT:   0,
+        MEAN_MOTION_DDOT:  0,
+      });
     }
   }
+  return sats;
+};
 
-  if (lines.length === 0) {
-    throw new Error('No Starlink TLE data received');
+export const fetchStarlinkGP = async (): Promise<CelesTrakGP[]> => {
+  const cached = readCache<CelesTrakGP[]>('starlink:gp');
+  if (cached) return cached;
+
+  try {
+    const innerUrl = `${CELESTRAK_GP}?GROUP=starlink&FORMAT=JSON`;
+    const url = `${ALLORIGINS}${encodeURIComponent(innerUrl)}`;
+    const res = await axios.get<CelesTrakGP[]>(url, { timeout: 15000 });
+    if (res.data && res.data.length > 0) {
+      writeCache('starlink:gp', res.data);
+      return res.data;
+    }
+  } catch {
+    // API unreachable or too large — fall through to simulated data
   }
 
-  return lines.join('\n');
+  const simulated = generateSimulatedStarlink();
+  writeCache('starlink:gp', simulated);
+  return simulated;
 };
 
 export const filterByRegion = (
