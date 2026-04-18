@@ -4,6 +4,7 @@ import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
   plugins: [react()],
+  base: process.env.GITHUB_ACTIONS ? '/satellite/' : '/',
   resolve: {
     alias: {
       // satellite.js dist/index.js re-exports dist/wasm/index.js which uses
