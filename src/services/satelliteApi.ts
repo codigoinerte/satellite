@@ -138,9 +138,13 @@ const buildSatellite = (gp: CelesTrakGP): Satellite3D | null => {
   };
 };
 
-// ─── CelesTrak GP API via allorigins CORS proxy ───────────────────────────────
+// ─── CelesTrak GP API via CORS proxy (corsproxy.io primary, allorigins fallback) ─
 const CELESTRAK_GP = 'https://celestrak.org/NORAD/elements/gp.php';
+const CORSPROXY  = 'https://corsproxy.io/?url=';
 const ALLORIGINS = 'https://api.allorigins.win/raw?url=';
+
+const proxiedUrl         = (u: string) => `${CORSPROXY}${encodeURIComponent(u)}`;
+const proxiedUrlFallback = (u: string) => `${ALLORIGINS}${encodeURIComponent(u)}`;
 
 // 6 groups that cover the most visually interesting satellite types.
 // Kept intentionally small to avoid rate-limiting on the allorigins proxy.
@@ -177,34 +181,45 @@ const writeCache = <T>(key: string, data: T): void => {
   }
 };
 
-// ─── Sequential fetch with delay — avoids rate-limiting on allorigins ────────
-const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
-
-const runSequential = async <T, R>(
-  items: T[],
-  worker: (item: T) => Promise<R>,
-  pauseMs = 300,
-): Promise<PromiseSettledResult<R>[]> => {
-  const out: PromiseSettledResult<R>[] = [];
-  for (let i = 0; i < items.length; i++) {
-    if (i > 0) await delay(pauseMs);
-    const result = await Promise.allSettled([worker(items[i])]);
-    out.push(result[0]);
-  }
-  return out;
-};
-
 const fetchCelesTrakGroup = async (group: string): Promise<CelesTrakGP[]> => {
   const cached = readCache<CelesTrakGP[]>(`group:${group}`);
   if (cached) return cached;
 
   const innerUrl = `${CELESTRAK_GP}?GROUP=${group}&FORMAT=JSON`;
-  const url = `${ALLORIGINS}${encodeURIComponent(innerUrl)}`;
-  const res = await axios.get<CelesTrakGP[]>(url, { timeout: 20000 });
-  const records = res.data || [];
+  let records: CelesTrakGP[] = [];
+  try {
+    const res = await axios.get<CelesTrakGP[]>(proxiedUrl(innerUrl), { timeout: 8000 });
+    records = res.data || [];
+  } catch {
+    const res = await axios.get<CelesTrakGP[]>(proxiedUrlFallback(innerUrl), { timeout: 8000 });
+    records = res.data || [];
+  }
 
   writeCache(`group:${group}`, records);
   return records;
+};
+
+// ─── Synchronous read from localStorage cache — for instant initial render ────
+export const readCachedSatellites = (): Satellite3D[] | null => {
+  const allGP: CelesTrakGP[] = [];
+  const seen = new Set<number>();
+  for (const group of CELESTRAK_GROUPS) {
+    const cached = readCache<CelesTrakGP[]>(`group:${group}`);
+    if (!cached) return null;
+    for (const gp of cached) {
+      if (!seen.has(gp.NORAD_CAT_ID)) {
+        seen.add(gp.NORAD_CAT_ID);
+        allGP.push(gp);
+      }
+    }
+  }
+  if (allGP.length === 0) return null;
+  const satellites: Satellite3D[] = [];
+  for (const gp of allGP) {
+    const sat = buildSatellite(gp);
+    if (sat) satellites.push(sat);
+  }
+  return satellites.length > 0 ? satellites : null;
 };
 
 // ─── Main: fetch satellites from CelesTrak ───────────────────────────────────
@@ -212,8 +227,9 @@ export const fetchSatellites = async (): Promise<Satellite3D[]> => {
   const seen = new Set<number>();
   const allGP: CelesTrakGP[] = [];
 
-  // Batch of 3 to avoid rate-limiting on cold cache
-  const results = await runSequential(CELESTRAK_GROUPS, fetchCelesTrakGroup);
+  const results = await Promise.allSettled(
+    CELESTRAK_GROUPS.map(group => fetchCelesTrakGroup(group))
+  );
 
   for (const result of results) {
     if (result.status === 'fulfilled') {
@@ -297,6 +313,34 @@ export const getMockSatellites = (): Satellite3D[] => {
     };
   });
 };
+
+// ─── Static mock events — shown immediately before NASA APIs respond ──────────
+export const MOCK_EVENTS: SatelliteEvent[] = [
+  { id: 'mock-solar-1',     type: 'solar',     title: 'Eyección solar (CME)',
+    meta: 'Evento de masa coronal moderado detectado por SOHO.',
+    time: new Date(Date.now() - 2  * 3_600_000) },
+  { id: 'mock-storm-1',     type: 'storm',     title: 'Tormenta geomagnética',
+    meta: 'Índice Kp 5 — perturbación moderada del campo magnético terrestre.',
+    time: new Date(Date.now() - 5  * 3_600_000) },
+  { id: 'mock-radiation-1', type: 'radiation', title: 'Alerta cinturón de radiación',
+    meta: 'Elevación de partículas energéticas en el cinturón exterior.',
+    time: new Date(Date.now() - 8  * 3_600_000) },
+  { id: 'mock-solar-2',     type: 'solar',     title: 'Llamarada solar M1.2',
+    meta: 'Llamarada clase M detectada en región activa AR3615.',
+    time: new Date(Date.now() - 11 * 3_600_000) },
+  { id: 'mock-fire-1',      type: 'fire',      title: 'Incendio detectado',
+    meta: 'Foco activo en cuenca amazónica — Pará, Brasil.',
+    time: new Date(Date.now() - 14 * 3_600_000) },
+  { id: 'mock-storm-2',     type: 'storm',     title: 'Tormenta severa',
+    meta: 'Sistema convectivo de mesoescala sobre Golfo de México.',
+    time: new Date(Date.now() - 18 * 3_600_000) },
+  { id: 'mock-eonet-1',     type: 'eonet',     title: 'Sismo detectado',
+    meta: 'M 5.4 — Zona de subducción frente a costa de Chile.',
+    time: new Date(Date.now() - 22 * 3_600_000) },
+  { id: 'mock-eonet-2',     type: 'eonet',     title: 'Evento de hielo marino',
+    meta: 'Fragmentación de plataforma en Mar de Weddell, Antártida.',
+    time: new Date(Date.now() - 26 * 3_600_000) },
+];
 
 // ─── NASA event types ─────────────────────────────────────────────────────────
 
@@ -472,8 +516,12 @@ export const fetchStarlinkGP = async (): Promise<CelesTrakGP[]> => {
 
   try {
     const innerUrl = `${CELESTRAK_GP}?GROUP=starlink&FORMAT=JSON`;
-    const url = `${ALLORIGINS}${encodeURIComponent(innerUrl)}`;
-    const res = await axios.get<CelesTrakGP[]>(url, { timeout: 15000 });
+    let res;
+    try {
+      res = await axios.get<CelesTrakGP[]>(proxiedUrl(innerUrl), { timeout: 8000 });
+    } catch {
+      res = await axios.get<CelesTrakGP[]>(proxiedUrlFallback(innerUrl), { timeout: 8000 });
+    }
     if (res.data && res.data.length > 0) {
       writeCache('starlink:gp', res.data);
       return res.data;

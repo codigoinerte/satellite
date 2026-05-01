@@ -12,6 +12,7 @@ import { InformationPanel } from './components/UI/InformationPanel';
 import {
   fetchSatellites, fetchNasaEvents, calcStats,
   fetchStarlinkGP, filterByRegion, STARLINK_REGIONS,
+  getMockSatellites, readCachedSatellites, MOCK_EVENTS,
 } from './services/satelliteApi';
 import type { Satellite3D, SatelliteEvent, SatelliteStats } from './types/satellite';
 import type { StarlinkRegion } from './services/satelliteApi';
@@ -41,14 +42,16 @@ function workerResultToSatellite3D(r: StarlinkWorkerResult): Satellite3D {
 }
 
 function App() {
-  const [satellites, setSatellites] = useState<Satellite3D[]>([]);
+  const [satellites, setSatellites] = useState<Satellite3D[]>(() => {
+    const cached = readCachedSatellites();
+    return cached ?? getMockSatellites();
+  });
   const [selectedSatellite, setSelectedSatellite] = useState<Satellite3D | null>(null);
-  const [events, setEvents] = useState<SatelliteEvent[]>([]);
+  const [events, setEvents] = useState<SatelliteEvent[]>(MOCK_EVENTS);
   const [stats, setStats] = useState<SatelliteStats>({
     total: 0, leo: 0, meo: 0, geo: 0, agencies: 0,
   });
   const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [activeNav, setActiveNav] = useState('globe');
 
   // ─── Starlink state ──────────────────────────────────────────────────────
@@ -61,32 +64,27 @@ function App() {
   const workerRef = useRef<Worker | null>(null);
   const repropagateRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ─── Load main satellites on mount ───────────────────────────────────────
+  // ─── Initialize selection + stats, then refresh in background ───────────────
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const sats = await fetchSatellites();
-        setSatellites(sats);
+    const initIss = satellites.find(s => s.name.toUpperCase().includes('ISS'));
+    setSelectedSatellite(initIss ?? satellites[0] ?? null);
+    setStats(calcStats(satellites));
 
-        const iss = sats.find((s) => s.name.toUpperCase().includes('ISS'));
-        if (iss) {
-          setSelectedSatellite(iss);
-        } else if (sats.length > 0) {
-          setSelectedSatellite(sats[0]);
-        }
+    fetchSatellites()
+      .then(freshSats => {
+        setSatellites(freshSats);
+        setStats(calcStats(freshSats));
+        setSelectedSatellite(prev => {
+          if (!prev) return freshSats[0] ?? null;
+          return freshSats.find(s => s.id === prev.id) ?? prev;
+        });
+      })
+      .catch(err => console.warn('Background satellite refresh failed:', err));
 
-        setStats(calcStats(sats));
-
-        // Fetch real NASA events (non-blocking)
-        fetchNasaEvents().then(setEvents).catch(() => {});
-      } catch (err) {
-        console.error('Failed to load satellites:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
+    fetchNasaEvents()
+      .then(realEvents => { if (realEvents.length > 0) setEvents(realEvents); })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
@@ -172,17 +170,7 @@ function App() {
 
           <div style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
             <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-              {loading ? (
-                <div
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    height: '100%', color: 'var(--text-md)', fontSize: '12px',
-                  }}
-                >
-                  Loading satellites...
-                </div>
-              ) : (
-                <>
+              <>
                   <EarthScene
                     satellites={satellites}
                     selectedSatellite={selectedSatellite}
@@ -190,7 +178,6 @@ function App() {
                   />
                   <HudOverlay selected={selectedSatellite} />
                 </>
-              )}
             </div>
             <Timeline />
           </div>
